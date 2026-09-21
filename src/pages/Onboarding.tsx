@@ -3,119 +3,301 @@ import { supabase } from '../lib/supabase'
 import type { Profile } from '../lib/utils'
 
 const STEPS = [
-    { icon: '👋', title: '¡Bienvenido a PractiTrack!', text: 'Una plataforma para planificar tu práctica profesional, registrar tus horas y saber en todo momento cuánto te falta para completarla.' },
-    { icon: '📅', title: 'Define tu horario', text: 'En "Horario" armas tu semana: qué días y en qué bloques trabajas, y cuáles son presenciales o remotos.' },
-    { icon: '📝', title: 'Registra tu avance', text: 'Cada día anota en la "Bitácora" cuántas horas trabajaste y qué hiciste. En "Tareas" organizas lo pendiente.' },
-    { icon: '📊', title: 'Mide tu progreso', text: 'El Dashboard te muestra el porcentaje de avance, las horas por semana y una fecha estimada de término.' },
+    { id: 1, label: 'Datos personales' },
+    { id: 2, label: 'Datos de la práctica' },
+    { id: 3, label: 'Meta de horas' },
+    { id: 4, label: 'Listo' },
 ]
 
-type Props = {
-    userId: string
-    profile: Profile
-    googleName: string
-    onDone: () => void
+type OnboardingProps = {
+    userId?: string
+    profile?: Profile | null
+    googleName?: string
+    onDone?: () => void
 }
 
-export default function Onboarding({ userId, profile, googleName, onDone }: Props) {
-    // Si ya tiene datos guardados, solo mostramos el tutorial (sin formulario)
-    const hasSetup = !!profile.full_name
-
-    const [step, setStep] = useState(0)
-    const [form, setForm] = useState({
-        full_name: profile.full_name ?? googleName,
-        institution: profile.institution ?? '',
-        career: profile.career ?? '',
-        required_hours: profile.required_hours ?? 360,
-        weekly_hours_target: profile.weekly_hours_target ?? 30,
-    })
+export default function Onboarding({ userId, profile, googleName, onDone }: OnboardingProps = {}) {
+    const [step, setStep] = useState(1)
     const [saving, setSaving] = useState(false)
-    const [error, setError] = useState('')
+    const [form, setForm] = useState({
+        full_name: profile?.full_name || googleName || '',
+        career: profile?.career ?? '',
+        institution: profile?.institution ?? '',
+        company: profile?.company ?? '',
+        supervisor: profile?.supervisor ?? '',
+        start_date: profile?.start_date ?? '',
+        required_hours: profile?.required_hours ?? 360,
+        weekly_hours_target: profile?.weekly_hours_target ?? 28,
+    })
 
-    const isLastStep = step === STEPS.length - 1
-    const isForm = !hasSetup && step === STEPS.length
-    const totalBars = hasSetup ? STEPS.length : STEPS.length + 1
+    const set = (k: keyof typeof form, v: string | number) =>
+        setForm((f) => ({ ...f, [k]: v }))
 
-    // Solo marca el tutorial como visto (no toca tus datos)
-    const markSeen = async () => {
+    const next = () => setStep((s) => Math.min(s + 1, 4))
+    const prev = () => setStep((s) => Math.max(s - 1, 1))
+
+    const finish = async () => {
         setSaving(true)
-        const { error } = await supabase.from('profiles').update({ onboarded: true }).eq('id', userId)
-        if (error) { setError(error.message); setSaving(false) } else onDone()
+        const uid = userId || (await supabase.auth.getUser()).data.user?.id
+        if (uid) {
+            await supabase
+                .from('profiles')
+                .update({ ...form, onboarded: true })
+                .eq('id', uid)
+        }
+        setSaving(false)
+        onDone?.()
     }
-
-    // Guarda datos + marca como visto (solo usuarios nuevos)
-    const finish = async (e: React.FormEvent) => {
-        e.preventDefault()
-        setSaving(true)
-        setError('')
-        const { error } = await supabase.from('profiles').upsert({ id: userId, ...form, onboarded: true })
-        if (error) { setError(error.message); setSaving(false) } else onDone()
-    }
-
-    // Saltar: usuario existente termina; usuario nuevo va al formulario
-    const skip = () => (hasSetup ? markSeen() : setStep(STEPS.length))
-
-    const next = () => (hasSetup && isLastStep ? markSeen() : setStep(step + 1))
-
-    const input = 'w-full border rounded-lg px-3 py-2'
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-            <div className="w-full max-w-md bg-white rounded-2xl shadow p-8">
-                <div className="flex gap-1 mb-6">
-                    {Array.from({ length: totalBars }).map((_, i) => (
-                        <div key={i} className={`h-1 flex-1 rounded ${i <= step ? 'bg-blue-600' : 'bg-gray-200'}`} />
-                    ))}
+        <div className="min-h-screen bg-slate-50 flex">
+            {/* Stepper lateral (desktop) */}
+            <aside className="hidden md:flex w-72 bg-white border-r border-slate-200 p-8 flex-col">
+                <div className="flex items-center gap-2 mb-10">
+                    <div className="w-8 h-8 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-sm">
+                        P
+                    </div>
+                    <span className="font-semibold">PractiTrack</span>
                 </div>
 
-                {!isForm ? (
-                    <div className="text-center">
-                        <div className="text-5xl mb-4">{STEPS[step].icon}</div>
-                        <h2 className="text-xl font-bold mb-2">{STEPS[step].title}</h2>
-                        <p className="text-gray-600 mb-8">{STEPS[step].text}</p>
+                <p className="text-xs text-slate-400 uppercase tracking-wide mb-4">Configuración</p>
 
-                        {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
+                <ol className="space-y-4 flex-1">
+                    {STEPS.map((s) => {
+                        const active = s.id === step
+                        const done = s.id < step
+                        return (
+                            <li key={s.id} className="flex items-start gap-3">
+                                <div
+                                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium shrink-0 transition-colors ${done
+                                        ? 'bg-emerald-500 text-white'
+                                        : active
+                                            ? 'bg-brand-600 text-white'
+                                            : 'bg-slate-100 text-slate-400'
+                                        }`}
+                                >
+                                    {done ? '✓' : s.id}
+                                </div>
+                                <div className="pt-0.5">
+                                    <p className={`text-sm font-medium ${active ? 'text-slate-900' : 'text-slate-500'}`}>
+                                        {s.label}
+                                    </p>
+                                </div>
+                            </li>
+                        )
+                    })}
+                </ol>
 
-                        <div className="flex justify-between">
-                            <button
-                                disabled={step === 0}
-                                onClick={() => setStep(step - 1)}
-                                className="text-gray-500 disabled:opacity-0"
-                            >
-                                Atrás
-                            </button>
-                            <button
-                                onClick={next}
-                                disabled={saving}
-                                className="bg-blue-600 text-white px-5 py-2 rounded-lg disabled:opacity-50"
-                            >
-                                {hasSetup && isLastStep ? (saving ? 'Guardando...' : 'Entendido ✅') : 'Siguiente'}
-                            </button>
-                        </div>
+                <p className="text-xs text-slate-400">Puedes cambiar esto luego desde Perfil.</p>
+            </aside>
 
-                        <button onClick={skip} disabled={saving} className="text-xs text-gray-400 mt-4">
-                            {hasSetup ? 'Cerrar tutorial' : 'Saltar tutorial'}
-                        </button>
+            {/* Contenido */}
+            <main className="flex-1 flex flex-col">
+                <div className="md:hidden p-4 border-b bg-white">
+                    <div className="flex items-center justify-between mb-3">
+                        <span className="font-semibold">Configuración</span>
+                        <span className="text-xs text-slate-400">Paso {step} de 4</span>
                     </div>
-                ) : (
-                    <form onSubmit={finish} className="space-y-3">
-                        <h2 className="text-xl font-bold">Configura tu práctica</h2>
-                        <input className={input} placeholder="Tu nombre" required value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
-                        <input className={input} placeholder="Institución" value={form.institution} onChange={(e) => setForm({ ...form, institution: e.target.value })} />
-                        <input className={input} placeholder="Carrera" value={form.career} onChange={(e) => setForm({ ...form, career: e.target.value })} />
-                        <label className="text-sm text-gray-600">Horas totales requeridas</label>
-                        <input className={input} type="number" min={1} required value={form.required_hours} onChange={(e) => setForm({ ...form, required_hours: +e.target.value })} />
-                        <label className="text-sm text-gray-600">Meta de horas por semana</label>
-                        <input className={input} type="number" min={1} required value={form.weekly_hours_target} onChange={(e) => setForm({ ...form, weekly_hours_target: +e.target.value })} />
-                        {error && <p className="text-red-600 text-sm">{error}</p>}
-                        <div className="flex justify-between pt-2">
-                            <button type="button" onClick={() => setStep(step - 1)} className="text-gray-500">Atrás</button>
-                            <button disabled={saving} className="bg-blue-600 text-white px-5 py-2 rounded-lg disabled:opacity-50">
-                                {saving ? 'Guardando...' : 'Empezar 🚀'}
+                    <div className="w-full bg-slate-100 rounded-full h-1.5">
+                        <div
+                            className="h-1.5 rounded-full bg-brand-600 transition-all"
+                            style={{ width: `${(step / 4) * 100}%` }}
+                        />
+                    </div>
+                </div>
+
+                <div className="flex-1 flex items-center justify-center p-6 md:p-12">
+                    <div className="w-full max-w-lg animate-slide-up">
+                        {step === 1 && (
+                            <div>
+                                <h1 className="text-2xl font-semibold tracking-tight mb-1">
+                                    Cuéntanos sobre ti
+                                </h1>
+                                <p className="text-sm text-slate-500 mb-8">
+                                    Esta información aparecerá en tu informe final.
+                                </p>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-xs font-medium text-slate-600 mb-1 block">
+                                            Nombre completo
+                                        </label>
+                                        <input
+                                            value={form.full_name}
+                                            onChange={(e) => set('full_name', e.target.value)}
+                                            className="input-base"
+                                            placeholder="Génesis Valdebenito"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-medium text-slate-600 mb-1 block">
+                                            Carrera
+                                        </label>
+                                        <input
+                                            value={form.career}
+                                            onChange={(e) => set('career', e.target.value)}
+                                            className="input-base"
+                                            placeholder="Ingeniería en Informática"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-medium text-slate-600 mb-1 block">
+                                            Institución
+                                        </label>
+                                        <input
+                                            value={form.institution}
+                                            onChange={(e) => set('institution', e.target.value)}
+                                            className="input-base"
+                                            placeholder="Duoc UC"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {step === 2 && (
+                            <div>
+                                <h1 className="text-2xl font-semibold tracking-tight mb-1">
+                                    ¿Dónde harás tu práctica?
+                                </h1>
+                                <p className="text-sm text-slate-500 mb-8">
+                                    Datos de la empresa o institución donde practicarás.
+                                </p>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-xs font-medium text-slate-600 mb-1 block">
+                                            Empresa o institución
+                                        </label>
+                                        <input
+                                            value={form.company}
+                                            onChange={(e) => set('company', e.target.value)}
+                                            className="input-base"
+                                            placeholder="Nombre de la empresa"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-medium text-slate-600 mb-1 block">
+                                            Supervisor de práctica
+                                        </label>
+                                        <input
+                                            value={form.supervisor}
+                                            onChange={(e) => set('supervisor', e.target.value)}
+                                            className="input-base"
+                                            placeholder="Nombre del supervisor"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-medium text-slate-600 mb-1 block">
+                                            Fecha de inicio
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={form.start_date}
+                                            onChange={(e) => set('start_date', e.target.value)}
+                                            className="input-base"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {step === 3 && (
+                            <div>
+                                <h1 className="text-2xl font-semibold tracking-tight mb-1">
+                                    Define tu meta
+                                </h1>
+                                <p className="text-sm text-slate-500 mb-8">
+                                    PractiTrack usará estos números para calcular tu progreso.
+                                </p>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-xs font-medium text-slate-600 mb-1 block">
+                                            Horas totales requeridas
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            value={form.required_hours}
+                                            onChange={(e) => set('required_hours', Number(e.target.value))}
+                                            className="input-base"
+                                        />
+                                        <p className="text-xs text-slate-400 mt-1">
+                                            Por defecto 360 h para práctica profesional.
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-medium text-slate-600 mb-1 block">
+                                            Meta semanal de horas
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={40}
+                                            value={form.weekly_hours_target}
+                                            onChange={(e) => set('weekly_hours_target', Number(e.target.value))}
+                                            className="input-base"
+                                        />
+                                        <p className="text-xs text-slate-400 mt-1">
+                                            Recomendado: entre 20 y 30 h para jornada parcial.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {step === 4 && (
+                            <div className="text-center">
+                                <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-3xl mx-auto mb-6">
+                                    ✓
+                                </div>
+                                <h1 className="text-2xl font-semibold tracking-tight mb-2">
+                                    ¡Todo listo, {form.full_name?.split(' ')[0] || 'practicante'}!
+                                </h1>
+                                <p className="text-sm text-slate-500 mb-8 max-w-sm mx-auto">
+                                    Ya puedes empezar a registrar tus horas, planificar tareas y ver tu progreso hacia las {form.required_hours} horas.
+                                </p>
+                                <div className="card text-left text-sm space-y-2 mb-6">
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Carrera</span>
+                                        <span className="font-medium">{form.career || '—'}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Institución</span>
+                                        <span className="font-medium">{form.institution || '—'}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Meta total</span>
+                                        <span className="font-medium">{form.required_hours} h</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Meta semanal</span>
+                                        <span className="font-medium">{form.weekly_hours_target} h</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Botones de navegación */}
+                        <div className="flex justify-between items-center mt-10">
+                            <button
+                                onClick={prev}
+                                disabled={step === 1}
+                                className="btn-ghost disabled:opacity-30"
+                            >
+                                ← Volver
                             </button>
+                            {step < 4 ? (
+                                <button onClick={next} className="btn-primary">
+                                    Siguiente →
+                                </button>
+                            ) : (
+                                <button onClick={finish} disabled={saving} className="btn-primary">
+                                    {saving ? 'Guardando...' : 'Empezar a usar PractiTrack'}
+                                </button>
+                            )}
                         </div>
-                    </form>
-                )}
-            </div>
+                    </div>
+                </div>
+            </main>
         </div>
     )
 }

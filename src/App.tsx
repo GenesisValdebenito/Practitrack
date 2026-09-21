@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard'
 import Schedule from './pages/Schedule'
 import Tasks from './pages/Tasks'
 import Logs from './pages/Logs'
+import Data from './pages/Data'
 import ProfilePage from './pages/ProfilePage'
 
 export default function App() {
@@ -60,6 +61,7 @@ export default function App() {
           <Route path="/horario" element={<Schedule />} />
           <Route path="/tareas" element={<Tasks />} />
           <Route path="/bitacora" element={<Logs />} />
+          <Route path="/datos" element={<Data />} />
           <Route path="/perfil" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Route>

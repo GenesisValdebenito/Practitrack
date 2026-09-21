@@ -1,11 +1,41 @@
+export type ThemeMode = 'light' | 'dark' | 'system'
+
+export type AvatarMode = 'google' | 'custom' | 'emoji' | 'initials' | 'notion'
+
+export type AvatarConfig = {
+    skin: string
+    hair: string
+    hairColor: string
+    eyes: string
+    eyebrows: string
+    mouth: string
+    accessories: string | null
+    bgColor: string
+}
+
 export type Profile = {
     id: string
-    full_name: string | null
-    institution: string | null
-    career: string | null
+    full_name: string
+    career: string
+    institution: string
     required_hours: number
     weekly_hours_target: number
     onboarded: boolean
+    company?: string | null
+    supervisor?: string | null
+    start_date?: string | null
+    email?: string | null
+    avatar_url?: string | null
+    avatar_mode?: AvatarMode | null
+    avatar_emoji?: string | null
+    avatar_config?: AvatarConfig | null
+}
+
+export type Shortcut = {
+    id: string
+    label: string
+    url: string
+    icon?: string
 }
 
 export const fmt = (d: Date) =>

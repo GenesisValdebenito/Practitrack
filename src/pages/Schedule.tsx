@@ -1,111 +1,208 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { useProfile } from '../hooks/useProfile'
 import { DAYS } from '../lib/utils'
 
-type Block = { id: string; day_of_week: number; start_time: string; end_time: string; is_in_person: boolean }
-
-const toMin = (t: string) => +t.slice(0, 2) * 60 + +t.slice(3, 5)
+type Block = {
+    id: string
+    day_of_week: number
+    start_time: string
+    end_time: string
+    title: string
+    is_in_person: boolean
+}
 
 export default function Schedule() {
-    const { profile } = useProfile()
     const [blocks, setBlocks] = useState<Block[]>([])
-    const [adding, setAdding] = useState<number | null>(null)
-    const [start, setStart] = useState('09:00')
-    const [end, setEnd] = useState('17:00')
-    const [inPerson, setInPerson] = useState(false)
-    const [error, setError] = useState('')
+    const [showForm, setShowForm] = useState(false)
+    const [saving, setSaving] = useState(false)
+    const [form, setForm] = useState({
+        day_of_week: 1,
+        start_time: '09:00',
+        end_time: '13:00',
+        title: '',
+        is_in_person: true,
+    })
 
     const load = useCallback(async () => {
-        const { data } = await supabase.from('schedules').select('*').order('start_time')
+        const { data } = await supabase
+            .from('schedule_blocks')
+            .select('*')
+            .order('day_of_week')
+            .order('start_time')
         setBlocks(data ?? [])
     }, [])
     useEffect(() => { load() }, [load])
 
-    const add = async (day: number) => {
-        if (toMin(end) <= toMin(start)) return setError('La hora de término debe ser mayor a la de inicio')
+    const submit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setSaving(true)
         const { data: { user } } = await supabase.auth.getUser()
-        const { error } = await supabase.from('schedules').insert({
-            user_id: user!.id, day_of_week: day, start_time: start, end_time: end, is_in_person: inPerson,
+        const { error } = await supabase.from('schedule_blocks').insert({
+            user_id: user!.id,
+            ...form,
         })
-        if (error) return setError(error.message)
-        setError(''); setAdding(null); load()
-    }
-
-    const toggle = async (b: Block) => {
-        await supabase.from('schedules').update({ is_in_person: !b.is_in_person }).eq('id', b.id)
+        setSaving(false)
+        if (error) return alert(error.message)
+        setForm({ ...form, title: '' })
+        setShowForm(false)
         load()
     }
+
     const remove = async (id: string) => {
-        await supabase.from('schedules').delete().eq('id', id)
+        await supabase.from('schedule_blocks').delete().eq('id', id)
         load()
     }
 
-    const hours = (b: Block) => (toMin(b.end_time) - toMin(b.start_time)) / 60
-    const weekly = blocks.reduce((s, b) => s + hours(b), 0)
-    const presencial = blocks.filter((b) => b.is_in_person).reduce((s, b) => s + hours(b), 0)
+    const totalWeeklyHours = blocks.reduce((s, b) => {
+        const [sh, sm] = b.start_time.split(':').map(Number)
+        const [eh, em] = b.end_time.split(':').map(Number)
+        return s + (eh + em / 60) - (sh + sm / 60)
+    }, 0)
 
     return (
         <div className="space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold">Mi horario semanal</h1>
-                <p className="text-gray-500 text-sm">
-                    {weekly.toFixed(1)} h planificadas de {profile.weekly_hours_target} h de meta
-                    ({presencial.toFixed(1)} h presenciales)
-                </p>
-                {weekly !== profile.weekly_hours_target && (
-                    <p className="text-xs text-amber-600 mt-1">
-                        {weekly < profile.weekly_hours_target
-                            ? `Te faltan ${(profile.weekly_hours_target - weekly).toFixed(1)} h para llegar a tu meta.`
-                            : `Superas tu meta por ${(weekly - profile.weekly_hours_target).toFixed(1)} h.`}
+            <div className="flex justify-between items-start gap-4">
+                <div>
+                    <h1 className="text-2xl font-semibold tracking-tight">Horario semanal</h1>
+                    <p className="text-sm text-secondary mt-1">
+                        {blocks.length} bloques · {totalWeeklyHours.toFixed(1)} h planificadas por semana
                     </p>
-                )}
+                </div>
+                <button onClick={() => setShowForm((v) => !v)} className="btn-primary shrink-0">
+                    {showForm ? 'Cancelar' : '+ Nuevo bloque'}
+                </button>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-7">
-                {DAYS.map((name, i) => {
-                    const day = i + 1
-                    const list = blocks.filter((b) => b.day_of_week === day)
+            {showForm && (
+                <form onSubmit={submit} className="card animate-slide-up space-y-4">
+                    <div className="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-medium text-secondary mb-1 block">Día</label>
+                            <select
+                                value={form.day_of_week}
+                                onChange={(e) => setForm({ ...form, day_of_week: Number(e.target.value) })}
+                                className="input-base"
+                            >
+                                {DAYS.map((d, i) => (
+                                    <option key={i} value={i + 1}>{d}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium text-secondary mb-1 block">Actividad</label>
+                            <input
+                                value={form.title}
+                                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                                className="input-base"
+                                placeholder="Ej: Desarrollo de módulo"
+                                required
+                            />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-medium text-secondary mb-1 block">Inicio</label>
+                            <input
+                                type="time"
+                                value={form.start_time}
+                                onChange={(e) => setForm({ ...form, start_time: e.target.value })}
+                                className="input-base"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium text-secondary mb-1 block">Fin</label>
+                            <input
+                                type="time"
+                                value={form.end_time}
+                                onChange={(e) => setForm({ ...form, end_time: e.target.value })}
+                                className="input-base"
+                                required
+                            />
+                        </div>
+                    </div>
+                    <div className="flex gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setForm({ ...form, is_in_person: true })}
+                            className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${form.is_in_person
+                                    ? 'bg-brand-600 text-[var(--color-brand-contrast)]'
+                                    : 'bg-[var(--bg-subtle)] text-secondary hover:bg-[var(--bg-hover)]'
+                                }`}
+                        >
+                            Presencial
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setForm({ ...form, is_in_person: false })}
+                            className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${!form.is_in_person
+                                    ? 'bg-brand-600 text-[var(--color-brand-contrast)]'
+                                    : 'bg-[var(--bg-subtle)] text-secondary hover:bg-[var(--bg-hover)]'
+                                }`}
+                        >
+                            Remoto
+                        </button>
+                    </div>
+                    <button type="submit" disabled={saving} className="btn-primary w-full">
+                        {saving ? 'Guardando...' : 'Agregar bloque'}
+                    </button>
+                </form>
+            )}
+
+            <div className="grid md:grid-cols-7 gap-3">
+                {DAYS.map((day, i) => {
+                    const dayBlocks = blocks.filter((b) => b.day_of_week === i + 1)
                     return (
-                        <div key={day} className="bg-white rounded-xl shadow p-3 min-h-40">
-                            <p className="font-semibold text-sm mb-2">{name}</p>
+                        <div
+                            key={i}
+                            className="bg-[var(--bg-subtle)] border border-[var(--border-soft)] rounded-xl p-3 min-h-[200px]"
+                        >
+                            <p className="text-xs font-medium text-secondary mb-3">{day}</p>
                             <div className="space-y-2">
-                                {list.map((b) => (
-                                    <div key={b.id} className={`rounded-lg p-2 text-xs ${b.is_in_person ? 'bg-green-100' : 'bg-blue-100'}`}>
-                                        <p className="font-medium">{b.start_time.slice(0, 5)} – {b.end_time.slice(0, 5)}</p>
-                                        <p>{hours(b)} h</p>
-                                        <div className="flex justify-between mt-1">
-                                            <button onClick={() => toggle(b)} title="Cambiar modalidad">{b.is_in_person ? '🏢' : '🏠'}</button>
-                                            <button onClick={() => remove(b.id)} className="text-red-600">✕</button>
+                                {dayBlocks.length === 0 && (
+                                    <p className="text-[10px] text-muted text-center py-4">Sin bloques</p>
+                                )}
+                                {dayBlocks.map((b) => (
+                                    <div
+                                        key={b.id}
+                                        className={`rounded-lg p-2.5 group cursor-default ${b.is_in_person
+                                                ? 'bg-brand-100 border-l-2 border-brand-500 dark:bg-brand-900/40 dark:border-brand-400'
+                                                : 'bg-emerald-100 border-l-2 border-emerald-500 dark:bg-emerald-900/40 dark:border-emerald-400'
+                                            }`}
+                                    >
+                                        <p className="text-xs font-semibold text-primary">
+                                            {b.start_time} – {b.end_time}
+                                        </p>
+                                        <p className="text-[11px] text-secondary truncate mt-0.5">
+                                            {b.title}
+                                        </p>
+                                        <div className="flex justify-between items-center mt-1.5">
+                                            <span className="text-[9px] uppercase tracking-wide text-muted">
+                                                {b.is_in_person ? 'Presencial' : 'Remoto'}
+                                            </span>
+                                            <button
+                                                onClick={() => remove(b.id)}
+                                                className="text-muted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                                            </button>
                                         </div>
                                     </div>
                                 ))}
                             </div>
-
-                            {adding === day ? (
-                                <div className="mt-2 space-y-1 text-xs">
-                                    <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="w-full border rounded px-1 py-1" />
-                                    <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="w-full border rounded px-1 py-1" />
-                                    <label className="flex items-center gap-1">
-                                        <input type="checkbox" checked={inPerson} onChange={(e) => setInPerson(e.target.checked)} /> Presencial
-                                    </label>
-                                    {error && <p className="text-red-600">{error}</p>}
-                                    <div className="flex gap-1">
-                                        <button onClick={() => add(day)} className="flex-1 bg-blue-600 text-white rounded py-1">Guardar</button>
-                                        <button onClick={() => { setAdding(null); setError('') }} className="flex-1 border rounded py-1">Cancelar</button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <button onClick={() => setAdding(day)} className="mt-2 w-full text-xs text-blue-600 border border-dashed rounded py-1">
-                                    + Bloque
-                                </button>
-                            )}
                         </div>
                     )
                 })}
             </div>
 
-            <p className="text-xs text-gray-500">🏢 Presencial (verde) · 🏠 Remoto (azul). Toca el ícono de un bloque para cambiar su modalidad.</p>
+            <div className="flex gap-4 text-xs text-secondary">
+                <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-sm bg-brand-100 dark:bg-brand-900/40 border-l-2 border-brand-500" /> Presencial
+                </span>
+                <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-sm bg-emerald-100 dark:bg-emerald-900/40 border-l-2 border-emerald-500" /> Remoto
+                </span>
+            </div>
         </div>
     )
 }
