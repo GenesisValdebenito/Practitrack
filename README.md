@@ -4,7 +4,7 @@ Plataforma web multiusuario para planificar, registrar y validar las horas de **
 
 > Proyecto desarrollado como parte de mi práctica profesional (360 horas).
 
-**Demo:** [pendiente de despliegue] · **Autor:** [Tu nombre]
+**Demo:** [pendiente de despliegue] · **Autor:** Génesis Valdebenito
 
 <!-- Agrega capturas en docs/ y enlázalas aquí -->
 <!-- ![Dashboard](docs/dashboard.png) -->
@@ -46,7 +46,7 @@ Los estudiantes deben acreditar cientos de horas de práctica y suelen llevar el
 ## Instalación
 
 ```bash
-git clone https://github.com/[tu-usuario]/practitrack.git
+git clone (https://github.com/GenesisValdebenito/Practitrack.git)
 cd practitrack
 npm install
 ```
@@ -118,7 +118,7 @@ Las fechas aceptan `AAAA-MM-DD` y `DD/MM/AAAA`.
 
 ## Roadmap
 
-- [ ] Modo oscuro
+- [x] Modo oscuro
 - [ ] Filtros por rango de fechas en el informe
 - [ ] Adjuntar evidencias (Supabase Storage)
 - [ ] Recordatorios por correo
