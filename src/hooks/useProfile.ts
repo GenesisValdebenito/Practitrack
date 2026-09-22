@@ -22,6 +22,12 @@ export function useProfile() {
             .eq('id', user.id)
             .maybeSingle()
 
+        const { data: periods } = await supabase
+            .from('availability_periods')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('start_date', { ascending: true })
+
         const meta = user.user_metadata || {}
         const provider = user.app_metadata?.provider
 
@@ -52,6 +58,7 @@ export function useProfile() {
             avatar_url: row?.avatar_url || googleAvatar || null,
             avatar_mode: row?.avatar_mode || (googleAvatar ? 'google' : 'initials'),
             avatar_config: row?.avatar_config || null,
+            availability_periods: periods || [],
         }
 
         setProfile(merged)

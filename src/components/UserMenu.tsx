@@ -72,32 +72,12 @@ function AvatarDisplay({ profile, size = 'md' }: { profile: Profile; size?: 'sm'
     )
 }
 
-// === Mini panel de apariencia (link a Perfil) ===
-function MiniAppearancePanel({ onNavigate }: { onNavigate: () => void }) {
-    return (
-        <div className="px-3 py-3 space-y-3">
-            <p className="text-xs text-muted">
-                Personaliza el tema, la tipografía y el tamaño desde tu perfil.
-            </p>
-            <Link
-                to="/perfil"
-                onClick={onNavigate}
-                className="flex items-center justify-between px-3 py-2 rounded-lg text-sm bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-primary"
-            >
-                <span className="flex items-center gap-2">
-                    <span className="text-muted"><Icon name="palette" /></span>
-                    Ir a Apariencia
-                </span>
-                <span className="text-muted"><Icon name="chevron-right" /></span>
-            </Link>
-        </div>
-    )
-}
+
 
 // === Componente principal ===
 export default function UserMenu({ profile, onUpdateProfile }: { profile: Profile; onUpdateProfile?: (patch: Partial<Profile>) => void }) {
     const [open, setOpen] = useState(false)
-    const [section, setSection] = useState<'main' | 'appearance'>('main')
+
     const [shortcuts, setShortcuts] = useState<Shortcut[]>(getShortcuts())
     const [showAddShortcut, setShowAddShortcut] = useState(false)
     const [newShortcut, setNewShortcut] = useState({ label: '', url: '' })
@@ -117,7 +97,7 @@ export default function UserMenu({ profile, onUpdateProfile }: { profile: Profil
             if (ref.current && !ref.current.contains(e.target as Node)) {
                 setOpen(false)
                 setShowAddShortcut(false)
-                setSection('main')
+
             }
         }
         document.addEventListener('mousedown', onClick)
@@ -154,7 +134,7 @@ export default function UserMenu({ profile, onUpdateProfile }: { profile: Profil
     return (
         <div className="relative" ref={ref}>
             <button
-                onClick={() => { setOpen((v) => !v); setSection('main') }}
+                onClick={() => { setOpen((v) => !v) }}
                 className="flex items-center gap-2 rounded-full border border-[var(--border-soft)] bg-[var(--bg-card)] hover:bg-[var(--bg-subtle)] transition-colors p-0.5 pr-3"
             >
                 <AvatarDisplay profile={profile} size="sm" />
@@ -166,10 +146,8 @@ export default function UserMenu({ profile, onUpdateProfile }: { profile: Profil
                 </svg>
             </button>
 
-            {open && (
+                    {open && (
                 <div className="absolute right-0 mt-2 w-80 bg-[var(--bg-card)] border border-[var(--border-soft)] rounded-xl shadow-lg shadow-black/5 overflow-hidden z-50 animate-slide-up">
-                    {section === 'main' && (
-                        <>
                             <div className="p-4 border-b border-[var(--border-soft)]">
                                 <div className="flex items-center gap-3">
                                     <AvatarDisplay profile={profile} size="md" />
@@ -194,18 +172,7 @@ export default function UserMenu({ profile, onUpdateProfile }: { profile: Profil
                                 )}
                             </div>
 
-                            <div className="p-2">
-                                <button
-                                    onClick={() => setSection('appearance')}
-                                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-[var(--bg-subtle)] transition-colors text-primary"
-                                >
-                                    <span className="text-muted"><Icon name="palette" /></span>
-                                    <span className="flex-1 text-left">Apariencia</span>
-                                    <span className="text-muted"><Icon name="chevron-right" /></span>
-                                </button>
-                            </div>
 
-                            <div className="border-t border-[var(--border-soft)]" />
 
                             <div className="p-2">
                                 <div className="flex items-center justify-between px-2 py-1.5">
@@ -311,23 +278,7 @@ export default function UserMenu({ profile, onUpdateProfile }: { profile: Profil
                                     Cerrar sesión
                                 </button>
                             </div>
-                        </>
-                    )}
 
-                    {section === 'appearance' && (
-                        <>
-                            <div className="p-2 flex items-center gap-2 border-b border-[var(--border-soft)]">
-                                <button
-                                    onClick={() => setSection('main')}
-                                    className="p-1.5 rounded-lg hover:bg-[var(--bg-subtle)] text-muted transition-colors"
-                                >
-                                    <Icon name="chevron-left" />
-                                </button>
-                                <p className="text-sm font-semibold text-primary">Apariencia</p>
-                            </div>
-                            <MiniAppearancePanel onNavigate={() => setOpen(false)} />
-                        </>
-                    )}
                 </div>
             )}
         </div>

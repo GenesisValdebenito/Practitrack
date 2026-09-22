@@ -1,287 +1,214 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useProfile } from '../hooks/useProfile'
-import { AvatarBuilder } from '../components/AvatarBuilder'
-import { Accordion } from '../components/Accordion'
-import AppearancePanel from '../components/AppearancePanel'
-import { renderAvatarSvgUri } from '../lib/avatar'
-import { COLOR_THEMES, getStoredMode, getStoredColor } from '../lib/theme'
-import type { Profile } from '../lib/utils'
-
-type Tab = 'apariencia' | 'cuenta' | 'practica' | 'metas'
+import type { Profile, Practice } from '../lib/utils'
 
 export default function ProfilePage() {
-    const { profile, loading, refresh } = useProfile()
-    const [tab, setTab] = useState<Tab>('apariencia')
+    const { profile, practices = [], activePracticeId, refresh } = useOutletContext<{ profile: Profile, practices: Practice[], activePracticeId: string, refresh: () => void }>()
+    const activePractice = practices.find(p => p.id === activePracticeId)
+    
+    const [saving, setSaving] = useState(false)
+    const [saved, setSaved] = useState('')
 
-    if (loading || !profile) {
-        return (
-            <div className="space-y-6 animate-pulse">
-                <div className="h-8 w-48 bg-[var(--bg-subtle)] rounded" />
-                <div className="h-12 bg-[var(--bg-subtle)] rounded" />
-                <div className="h-64 bg-[var(--bg-subtle)] rounded-xl" />
-            </div>
-        )
+    const [profileForm, setProfileForm] = useState({
+        full_name: profile.full_name || '',
+        email: profile.email || '',
+    })
+
+    const [practiceForm, setPracticeForm] = useState({
+        name: activePractice?.name || '',
+        institution: activePractice?.institution || '',
+        career: activePractice?.career || '',
+        company: activePractice?.company || '',
+        supervisor: activePractice?.supervisor || '',
+        start_date: activePractice?.start_date || '',
+        required_hours: activePractice?.required_hours || 360,
+        weekly_hours_target: activePractice?.weekly_hours_target || 30,
+    })
+
+    useEffect(() => {
+        if (activePractice) {
+            setPracticeForm({
+                name: activePractice.name || '',
+                institution: activePractice.institution || '',
+                career: activePractice.career || '',
+                company: activePractice.company || '',
+                supervisor: activePractice.supervisor || '',
+                start_date: activePractice.start_date || '',
+                required_hours: activePractice.required_hours || 360,
+                weekly_hours_target: activePractice.weekly_hours_target || 30,
+            })
+        }
+    }, [activePractice])
+
+    const saveProfile = async () => {
+        setSaving(true)
+        await supabase.from('profiles').update(profileForm).eq('id', profile.id)
+        setSaving(false)
+        setSaved('profile')
+        refresh()
+        setTimeout(() => setSaved(''), 2500)
     }
 
-    const tabs: { id: Tab; label: string }[] = [
-        { id: 'apariencia', label: 'Apariencia' },
-        { id: 'cuenta', label: 'Cuenta' },
-        { id: 'practica', label: 'Práctica' },
-        { id: 'metas', label: 'Metas' },
-    ]
+    const savePractice = async () => {
+        if (!activePractice) return
+        setSaving(true)
+        await supabase.from('practices').update(practiceForm).eq('id', activePractice.id)
+        setSaving(false)
+        setSaved('practice')
+        refresh()
+        setTimeout(() => setSaved(''), 2500)
+    }
 
-    return (
-        <div className="space-y-6">
-            <div>
-                <h1 className="text-2xl font-semibold tracking-tight text-primary">Perfil</h1>
-                <p className="text-sm text-secondary mt-1">
-                    Personaliza tu cuenta y tus datos de práctica.
-                </p>
-            </div>
-
-            <div className="border-b border-[var(--border-soft)]">
-                <div className="flex gap-6 overflow-x-auto">
-                    {tabs.map((t) => (
-                        <button
-                            key={t.id}
-                            onClick={() => setTab(t.id)}
-                            className={`pb-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${tab === t.id
-                                    ? 'border-brand-600 text-brand-600 dark:text-brand-400 dark:border-brand-400'
-                                    : 'border-transparent text-muted hover:text-primary'
-                                }`}
-                        >
-                            {t.label}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {tab === 'apariencia' && <AparienciaTab profile={profile} refresh={refresh} />}
-            {tab === 'cuenta' && <CuentaTab profile={profile} refresh={refresh} />}
-            {tab === 'practica' && <PracticaTab profile={profile} refresh={refresh} />}
-            {tab === 'metas' && <MetasTab profile={profile} refresh={refresh} />}
-        </div>
-    )
-}
-
-function AparienciaTab({ profile, refresh }: { profile: Profile; refresh: () => void }) {
-    const avatarMode = profile.avatar_mode || 'initials'
-    const avatarConfig = profile.avatar_config || null
-
-    const avatarSummary = (
-        <div className="flex items-center gap-3">
-            <AvatarMini profile={profile} />
-            <span className="text-xs text-muted">
-                {avatarMode === 'notion' && avatarConfig && 'Avatar personalizado'}
-                {avatarMode === 'google' && 'Foto de Google'}
-                {avatarMode === 'custom' && 'Foto subida'}
-                {avatarMode === 'initials' && 'Iniciales'}
-            </span>
-        </div>
-    )
-
-    const themeSummary = (
-        <div className="flex items-center gap-2 text-xs text-muted">
-            <span>
-                {getStoredMode() === 'dark' ? '🌙 Oscuro' : getStoredMode() === 'light' ? '☀️ Claro' : '💻 Sistema'}
-            </span>
-            <span>·</span>
-            <span className="flex items-center gap-1.5">
-                <span
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: COLOR_THEMES.find((t) => t.id === getStoredColor())?.preview }}
-                />
-                {COLOR_THEMES.find((t) => t.id === getStoredColor())?.name}
-            </span>
-        </div>
-    )
-
-    return (
-        <div className="space-y-3">
-            <Accordion title="Avatar" summary={avatarSummary}>
-                <AvatarBuilder profile={profile} onUpdate={refresh} />
-            </Accordion>
-
-            <Accordion title="Apariencia" summary={themeSummary}>
-                <AppearancePanel />
-            </Accordion>
-        </div>
-    )
-}
-
-function AvatarMini({ profile }: { profile: Profile }) {
-    const mode = profile.avatar_mode || (profile.avatar_url ? 'google' : 'initials')
     const initials = (profile.full_name || 'U').split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
-
-    if (mode === 'notion' && profile.avatar_config) {
-        try {
-            const uri = renderAvatarSvgUri(profile.id, profile.avatar_config)
-            return <img src={uri} alt="" className="w-8 h-8 rounded-full" />
-        } catch { }
-    }
-    if ((mode === 'google' || mode === 'custom') && profile.avatar_url) {
-        return <img src={profile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
-    }
-    return (
-        <span className="w-8 h-8 rounded-full bg-brand-600 text-[var(--color-brand-contrast)] font-semibold flex items-center justify-center text-[10px]">
-            {initials}
-        </span>
-    )
-}
-
-function CuentaTab({ profile, refresh }: { profile: Profile; refresh: () => void }) {
-    const [saving, setSaving] = useState(false)
-    const [saved, setSaved] = useState(false)
-    const [form, setForm] = useState({
-        full_name: profile.full_name ?? '',
-        email: profile.email ?? '',
-    })
-
-    const save = async () => {
-        setSaving(true)
-        setSaved(false)
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-            await supabase.from('profiles').update(form).eq('id', user.id)
-        }
-        setSaving(false)
-        setSaved(true)
-        refresh()
-        setTimeout(() => setSaved(false), 2500)
-    }
+    const avatarImg = profile.avatar_url || ''
 
     return (
-        <div className="space-y-4">
-            <section className="card space-y-4">
-                <h2 className="font-semibold text-sm text-primary">Datos de la cuenta</h2>
-                <Field label="Nombre completo" value={form.full_name} onChange={(v) => setForm({ ...form, full_name: v })} placeholder="Génesis Valdebenito" />
-                <Field label="Correo electrónico" value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder="tu@correo.cl" type="email" />
-            </section>
-            <div className="flex items-center justify-between gap-4">
-                <p className="text-xs text-muted">{saved ? '✓ Cambios guardados' : 'Los cambios se aplican a tu cuenta.'}</p>
-                <button onClick={save} disabled={saving} className="btn-primary">
-                    {saving ? 'Guardando...' : 'Guardar cambios'}
-                </button>
-            </div>
-        </div>
-    )
-}
+        <div className="animate-fade-in text-[var(--text-primary)] pb-12">
+            <h1 className="text-2xl font-semibold mb-8 pl-1">Perfil</h1>
 
-function PracticaTab({ profile, refresh }: { profile: Profile; refresh: () => void }) {
-    const [saving, setSaving] = useState(false)
-    const [saved, setSaved] = useState(false)
-    const [form, setForm] = useState({
-        career: profile.career ?? '',
-        institution: profile.institution ?? '',
-        company: profile.company ?? '',
-        supervisor: profile.supervisor ?? '',
-        start_date: profile.start_date ?? '',
-    })
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                {/* Columna Izquierda: Perfil y Avatar */}
+                <div className="space-y-6">
+                    <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-lg p-5">
+                        <h2 className="text-sm font-semibold mb-5 text-[var(--text-secondary)] uppercase tracking-wider">Tu Cuenta</h2>
+                        
+                        <div className="flex items-center gap-4 mb-6">
+                            {avatarImg ? (
+                                <img src={avatarImg} alt="" className="w-14 h-14 rounded-full object-cover border border-[var(--border-strong)]" />
+                            ) : (
+                                <div className="w-14 h-14 rounded-full bg-brand-600 text-white font-semibold flex items-center justify-center text-xl">
+                                    {initials}
+                                </div>
+                            )}
+                            <div className="flex-1">
+                                <p className="text-sm text-[var(--text-primary)] font-medium">{profile.full_name}</p>
+                                <p className="text-xs text-[var(--text-muted)]">{profile.email}</p>
+                            </div>
+                        </div>
 
-    const save = async () => {
-        setSaving(true)
-        setSaved(false)
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-            await supabase.from('profiles').update(form).eq('id', user.id)
-        }
-        setSaving(false)
-        setSaved(true)
-        refresh()
-        setTimeout(() => setSaved(false), 2500)
-    }
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs text-[var(--text-muted)] mb-1">Nombre Completo</label>
+                                <input 
+                                    value={profileForm.full_name} 
+                                    onChange={e => setProfileForm({...profileForm, full_name: e.target.value})}
+                                    className="w-full bg-[var(--bg-app)] border border-[var(--border-strong)] rounded px-3 py-2 text-sm focus:border-gray-500 outline-none"
+                                />
+                            </div>
+                            <div className="flex justify-between items-center pt-2">
+                                <span className="text-xs text-brand-500">{saved === 'profile' ? '✓ Guardado' : ''}</span>
+                                <button onClick={saveProfile} disabled={saving} className="bg-[var(--border-strong)] hover:bg-[#444] px-4 py-1.5 rounded text-sm transition-colors">
+                                    Guardar Cuenta
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
-    return (
-        <div className="space-y-4">
-            <section className="card space-y-4">
-                <h2 className="font-semibold text-sm text-primary">Datos académicos</h2>
-                <div className="grid md:grid-cols-2 gap-4">
-                    <Field label="Carrera" value={form.career} onChange={(v) => setForm({ ...form, career: v })} placeholder="Ingeniería en Informática" />
-                    <Field label="Institución" value={form.institution} onChange={(v) => setForm({ ...form, institution: v })} placeholder="Duoc UC" />
+
                 </div>
-            </section>
-            <section className="card space-y-4">
-                <h2 className="font-semibold text-sm text-primary">Datos de la práctica</h2>
-                <Field label="Empresa o institución" value={form.company} onChange={(v) => setForm({ ...form, company: v })} placeholder="Nombre de la empresa" />
-                <div className="grid md:grid-cols-2 gap-4">
-                    <Field label="Supervisor" value={form.supervisor} onChange={(v) => setForm({ ...form, supervisor: v })} placeholder="Nombre del supervisor" />
-                    <Field label="Fecha de inicio" type="date" value={form.start_date} onChange={(v) => setForm({ ...form, start_date: v })} />
+
+                {/* Columna Derecha: Práctica Activa */}
+                <div className="space-y-6">
+                    <div className="bg-[var(--bg-card)] border border-[var(--border-strong)] rounded-lg p-5">
+                        <div className="flex justify-between items-center mb-5">
+                            <h2 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Práctica Activa</h2>
+                            <span className="text-xs bg-[var(--bg-subtle)] px-2 py-1 rounded text-[var(--text-primary)] border border-[var(--border-strong)]">
+                                {activePractice?.name || 'Ninguna'}
+                            </span>
+                        </div>
+                        
+                        {!activePractice ? (
+                            <p className="text-sm text-[var(--text-muted)]">No hay ninguna práctica seleccionada.</p>
+                        ) : (
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-xs text-[var(--text-muted)] mb-1">Nombre de la Práctica (Semestre/Periodo)</label>
+                                    <input 
+                                        value={practiceForm.name} 
+                                        onChange={e => setPracticeForm({...practiceForm, name: e.target.value})}
+                                        className="w-full bg-[var(--bg-app)] border border-[var(--border-strong)] rounded px-3 py-2 text-sm focus:border-gray-500 outline-none"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs text-[var(--text-muted)] mb-1">Institución</label>
+                                        <input 
+                                            value={practiceForm.institution} 
+                                            onChange={e => setPracticeForm({...practiceForm, institution: e.target.value})}
+                                            className="w-full bg-[var(--bg-app)] border border-[var(--border-strong)] rounded px-3 py-2 text-sm focus:border-gray-500 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-[var(--text-muted)] mb-1">Carrera</label>
+                                        <input 
+                                            value={practiceForm.career} 
+                                            onChange={e => setPracticeForm({...practiceForm, career: e.target.value})}
+                                            className="w-full bg-[var(--bg-app)] border border-[var(--border-strong)] rounded px-3 py-2 text-sm focus:border-gray-500 outline-none"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs text-[var(--text-muted)] mb-1">Empresa</label>
+                                        <input 
+                                            value={practiceForm.company} 
+                                            onChange={e => setPracticeForm({...practiceForm, company: e.target.value})}
+                                            className="w-full bg-[var(--bg-app)] border border-[var(--border-strong)] rounded px-3 py-2 text-sm focus:border-gray-500 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-[var(--text-muted)] mb-1">Supervisor</label>
+                                        <input 
+                                            value={practiceForm.supervisor} 
+                                            onChange={e => setPracticeForm({...practiceForm, supervisor: e.target.value})}
+                                            className="w-full bg-[var(--bg-app)] border border-[var(--border-strong)] rounded px-3 py-2 text-sm focus:border-gray-500 outline-none"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="block text-xs text-[var(--text-muted)] mb-1">Fecha Inicio</label>
+                                        <input 
+                                            type="date"
+                                            value={practiceForm.start_date} 
+                                            onChange={e => setPracticeForm({...practiceForm, start_date: e.target.value})}
+                                            className="w-full bg-[var(--bg-app)] border border-[var(--border-strong)] rounded px-3 py-2 text-sm focus:border-gray-500 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-[var(--text-muted)] mb-1">Meta Total (h)</label>
+                                        <input 
+                                            type="number"
+                                            value={practiceForm.required_hours} 
+                                            onChange={e => setPracticeForm({...practiceForm, required_hours: Number(e.target.value)})}
+                                            className="w-full bg-[var(--bg-app)] border border-[var(--border-strong)] rounded px-3 py-2 text-sm focus:border-gray-500 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-[var(--text-muted)] mb-1">Meta Semanal</label>
+                                        <input 
+                                            type="number"
+                                            value={practiceForm.weekly_hours_target} 
+                                            onChange={e => setPracticeForm({...practiceForm, weekly_hours_target: Number(e.target.value)})}
+                                            className="w-full bg-[var(--bg-app)] border border-[var(--border-strong)] rounded px-3 py-2 text-sm focus:border-gray-500 outline-none"
+                                        />
+                                    </div>
+                                </div>
+                                
+                                <div className="flex justify-between items-center pt-2">
+                                    <span className="text-xs text-brand-500">{saved === 'practice' ? '✓ Guardado' : ''}</span>
+                                    <button onClick={savePractice} disabled={saving} className="bg-[var(--border-strong)] hover:bg-[#444] px-4 py-1.5 rounded text-sm transition-colors">
+                                        Guardar Práctica
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
-            </section>
-            <div className="flex items-center justify-between gap-4">
-                <p className="text-xs text-muted">{saved ? '✓ Cambios guardados' : 'Los cambios se aplican a tu práctica.'}</p>
-                <button onClick={save} disabled={saving} className="btn-primary">
-                    {saving ? 'Guardando...' : 'Guardar cambios'}
-                </button>
+
             </div>
-        </div>
-    )
-}
-
-function MetasTab({ profile, refresh }: { profile: Profile; refresh: () => void }) {
-    const [saving, setSaving] = useState(false)
-    const [saved, setSaved] = useState(false)
-    const [form, setForm] = useState({
-        required_hours: profile.required_hours ?? 360,
-        weekly_hours_target: profile.weekly_hours_target ?? 28,
-    })
-
-    const save = async () => {
-        setSaving(true)
-        setSaved(false)
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-            await supabase.from('profiles').update(form).eq('id', user.id)
-        }
-        setSaving(false)
-        setSaved(true)
-        refresh()
-        setTimeout(() => setSaved(false), 2500)
-    }
-
-    return (
-        <div className="space-y-4">
-            <section className="card space-y-4">
-                <h2 className="font-semibold text-sm text-primary">Metas de práctica</h2>
-                <div className="grid md:grid-cols-2 gap-4">
-                    <Field label="Horas totales requeridas" type="number" value={form.required_hours} onChange={(v) => setForm({ ...form, required_hours: Number(v) })} />
-                    <Field label="Meta semanal (h)" type="number" value={form.weekly_hours_target} onChange={(v) => setForm({ ...form, weekly_hours_target: Number(v) })} />
-                </div>
-            </section>
-            <div className="flex items-center justify-between gap-4">
-                <p className="text-xs text-muted">{saved ? '✓ Cambios guardados' : 'Los cambios se aplican a tu dashboard.'}</p>
-                <button onClick={save} disabled={saving} className="btn-primary">
-                    {saving ? 'Guardando...' : 'Guardar cambios'}
-                </button>
-            </div>
-        </div>
-    )
-}
-
-function Field({
-    label,
-    value,
-    onChange,
-    type = 'text',
-    placeholder,
-}: {
-    label: string
-    value: string | number
-    onChange: (v: string) => void
-    type?: string
-    placeholder?: string
-}) {
-    return (
-        <div>
-            <label className="text-xs font-medium text-secondary mb-1 block">{label}</label>
-            <input
-                type={type}
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                placeholder={placeholder}
-                className="input-base"
-            />
         </div>
     )
 }

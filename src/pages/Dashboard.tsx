@@ -70,7 +70,11 @@ export default function Dashboard() {
     }
 
     const required = profile.required_hours ?? 360
-    const target = profile.weekly_hours_target ?? 28
+    
+    const todayStr = new Date().toISOString().slice(0, 10)
+    const activePeriod = profile.availability_periods?.find(p => p.start_date <= todayStr && (!p.end_date || p.end_date >= todayStr))
+    const target = activePeriod ? Number(activePeriod.hours_per_week) : (profile.weekly_hours_target ?? 28)
+    
     const total = logs.reduce((s, l) => s + Number(l.hours_worked), 0)
     const percent = required > 0 ? Math.min((total / required) * 100, 100) : 0
     const remaining = Math.max(required - total, 0)
@@ -79,7 +83,27 @@ export default function Dashboard() {
         .reduce((s, l) => s + Number(l.hours_worked), 0)
 
     const end = new Date()
-    end.setDate(end.getDate() + Math.ceil(remaining / Math.max(target, 1)) * 7)
+    if (profile.availability_periods && profile.availability_periods.length > 0) {
+        let rem = remaining
+        let currentDay = new Date()
+        currentDay.setHours(0, 0, 0, 0)
+        let safety = 0
+        while (rem > 0 && safety < 1000) {
+            safety++
+            const currentStr = currentDay.toISOString().slice(0, 10)
+            const active = profile.availability_periods.find(p => 
+                p.start_date <= currentStr && (!p.end_date || p.end_date >= currentStr)
+            )
+            const dailyHours = active ? (Number(active.hours_per_week) / 7) : (target / 7)
+            rem -= dailyHours
+            if (rem > 0) {
+                currentDay.setDate(currentDay.getDate() + 1)
+            }
+        }
+        end.setTime(currentDay.getTime())
+    } else {
+        end.setDate(end.getDate() + Math.ceil(remaining / Math.max(target, 1)) * 7)
+    }
 
     const weeks = Array.from({ length: 8 }, (_, i) => {
         const d = new Date()

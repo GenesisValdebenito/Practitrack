@@ -91,47 +91,39 @@ export default function Tasks() {
     const donePercent = plannedTotal > 0 ? (doneTotal / plannedTotal) * 100 : 0
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-start gap-4">
-                <div>
-                    <h1 className="text-2xl font-semibold tracking-tight">Tareas</h1>
-                    <p className="text-sm text-secondary mt-1">
-                        {doneTotal.toFixed(1)} h cumplidas de {plannedTotal.toFixed(1)} h planificadas.
-                    </p>
-                </div>
-                <button onClick={() => setShowForm((v) => !v)} className="btn-primary shrink-0">
-                    {showForm ? 'Cancelar' : '+ Nueva tarea'}
+        <div className="flex flex-col h-full bg-[#333] rounded-lg border border-[#444] overflow-hidden">
+            {/* Header (Standard View) */}
+            <div className="flex justify-between items-center bg-[#2e2e2e] border-b border-[#444] px-4 py-2">
+                <button className="flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors">
+                    Standard View
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 </button>
-            </div>
-
-            {/* Barra de progreso */}
-            <div className="card">
-                <div className="flex justify-between text-xs text-secondary mb-2">
-                    <span>Progreso de tareas</span>
-                    <span>{donePercent.toFixed(0)}%</span>
-                </div>
-                <div className="w-full bg-[var(--bg-subtle)] rounded-full h-2 overflow-hidden">
-                    <div
-                        className="h-2 rounded-full bg-gradient-to-r from-brand-500 to-accent-500 transition-all"
-                        style={{ width: `${donePercent}%` }}
-                    />
+                <div className="flex items-center">
+                    <button className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white border-l border-[#444] transition-colors">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                    </button>
+                    <button onClick={() => setShowForm((v) => !v)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white border-l border-[#444] transition-colors">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    </button>
                 </div>
             </div>
 
+            {/* Error Message */}
             {error && (
-                <p className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-4 py-3">
+                <div className="p-4 bg-red-900/50 border-b border-red-800 text-red-200 text-sm">
                     {error}
-                </p>
+                </div>
             )}
 
+            {/* Formulario */}
             {showForm && (
-                <form onSubmit={add} className="card animate-slide-up space-y-3">
+                <form onSubmit={add} className="p-4 bg-[#2e2e2e] border-b border-[#444] space-y-3">
                     <input
                         required
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
                         placeholder="¿Qué vas a hacer?"
-                        className="input-base"
+                        className="w-full bg-[#1c1c1c] border border-[#444] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-gray-400"
                     />
                     <div className="flex flex-col md:flex-row gap-3">
                         <input
@@ -141,95 +133,97 @@ export default function Tasks() {
                             max="24"
                             value={hours}
                             onChange={(e) => setHours(e.target.value)}
-                            placeholder="Horas planificadas"
-                            className="input-base flex-1"
+                            placeholder="Horas"
+                            className="flex-1 bg-[#1c1c1c] border border-[#444] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-gray-400"
                         />
                         <input
                             type="date"
                             value={due}
                             onChange={(e) => setDue(e.target.value)}
-                            className="input-base"
+                            className="bg-[#1c1c1c] border border-[#444] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-gray-400"
                         />
+                        <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors">
+                            Agregar
+                        </button>
                     </div>
-                    <button className="btn-primary w-full">Agregar tarea</button>
                 </form>
             )}
 
-            <div className="grid md:grid-cols-3 gap-4">
-                {COLS.map((col, ci) => {
-                    const items = tasks.filter((t) => t.status === col.key)
-                    return (
-                        <div
-                            key={col.key}
-                            className="bg-[var(--bg-subtle)] border border-[var(--border-soft)] rounded-xl p-3"
-                        >
-                            <div className="flex items-center gap-2 mb-3 px-1">
-                                <span className={`w-2 h-2 rounded-full ${col.color}`} />
-                                <p className="font-medium text-sm text-primary">{col.label}</p>
-                                <span className="text-xs text-muted ml-auto">{items.length}</span>
-                            </div>
-                            <div className="space-y-2 max-h-[65vh] overflow-y-auto pr-1">
-                                {items.length === 0 && (
-                                    <p className="text-xs text-muted text-center py-4">Sin tareas</p>
-                                )}
-                                {items.map((t) => (
-                                    <div
-                                        key={t.id}
-                                        className="bg-[var(--bg-card)] border border-[var(--border-soft)] rounded-lg p-3 group hover:border-brand-400 transition-colors"
-                                    >
-                                        <p className={`text-sm font-medium leading-snug ${t.status === 'done' ? 'line-through text-muted' : 'text-primary'
-                                            }`}>
-                                            {t.title}
-                                        </p>
-                                        <div className="flex flex-wrap gap-2 mt-2 text-xs text-secondary">
-                                            {t.due_date && (
-                                                <span className="inline-flex items-center gap-1 bg-[var(--bg-subtle)] rounded px-1.5 py-0.5">
-                                                    {t.due_date}
-                                                </span>
-                                            )}
-                                            {t.planned_hours && (
-                                                <span className="inline-flex items-center gap-1 bg-[var(--bg-subtle)] rounded px-1.5 py-0.5">
-                                                    {t.planned_hours} h
-                                                </span>
-                                            )}
-                                            {t.category && (
-                                                <span className="inline-flex items-center gap-1 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded px-1.5 py-0.5">
-                                                    {t.category}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex justify-between items-center mt-3 pt-2 border-t border-[var(--border-soft)] opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <div className="flex gap-1">
-                                                {ci > 0 && (
-                                                    <button
-                                                        onClick={() => move(t, COLS[ci - 1].key)}
-                                                        className="text-xs text-secondary hover:text-brand-600 px-1.5 py-0.5 rounded hover:bg-[var(--bg-subtle)]"
-                                                    >
-                                                        ← Atrás
-                                                    </button>
-                                                )}
-                                                {ci < 2 && (
-                                                    <button
-                                                        onClick={() => move(t, COLS[ci + 1].key)}
-                                                        className="text-xs text-brand-600 hover:text-brand-700 px-1.5 py-0.5 rounded hover:bg-brand-50 dark:hover:bg-brand-900/30"
-                                                    >
-                                                        {ci === 0 ? 'Empezar →' : 'Completar →'}
-                                                    </button>
-                                                )}
-                                            </div>
-                                            <button
-                                                onClick={() => remove(t)}
-                                                className="text-xs text-muted hover:text-red-600"
-                                            >
-                                                Eliminar
-                                            </button>
-                                        </div>
+            {/* Content area */}
+            <div className="flex-1 flex flex-col p-4 overflow-hidden relative">
+                {tasks.length === 0 ? (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <h2 className="text-4xl font-bold text-[#444] tracking-wider uppercase">No Tasks</h2>
+                    </div>
+                ) : (
+                    <div className="grid md:grid-cols-3 gap-4 h-full">
+                        {COLS.map((col, ci) => {
+                            const items = tasks.filter((t) => t.status === col.key)
+                            return (
+                                <div
+                                    key={col.key}
+                                    className="bg-[#282828] border border-[#444] rounded p-3 flex flex-col"
+                                >
+                                    <div className="flex items-center gap-2 mb-3 px-1">
+                                        <span className={`w-2 h-2 rounded-full ${col.color}`} />
+                                        <p className="font-medium text-sm text-gray-200">{col.label}</p>
+                                        <span className="text-xs text-gray-500 ml-auto">{items.length}</span>
                                     </div>
-                                ))}
-                            </div>
-                        </div>
-                    )
-                })}
+                                    <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                                        {items.map((t) => (
+                                            <div
+                                                key={t.id}
+                                                className="bg-[#1c1c1c] border border-[#444] rounded p-3 group hover:border-gray-500 transition-colors"
+                                            >
+                                                <p className={`text-sm font-medium leading-snug ${t.status === 'done' ? 'line-through text-gray-500' : 'text-gray-200'}`}>
+                                                    {t.title}
+                                                </p>
+                                                <div className="flex flex-wrap gap-2 mt-2 text-xs text-gray-400">
+                                                    {t.due_date && (
+                                                        <span className="inline-flex items-center gap-1 bg-[#282828] border border-[#444] rounded px-1.5 py-0.5">
+                                                            {t.due_date}
+                                                        </span>
+                                                    )}
+                                                    {t.planned_hours && (
+                                                        <span className="inline-flex items-center gap-1 bg-[#282828] border border-[#444] rounded px-1.5 py-0.5">
+                                                            {t.planned_hours} h
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex justify-between items-center mt-3 pt-2 border-t border-[#444] opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <div className="flex gap-1">
+                                                        {ci > 0 && (
+                                                            <button
+                                                                onClick={() => move(t, COLS[ci - 1].key)}
+                                                                className="text-[10px] text-gray-400 hover:text-white px-1.5 py-0.5 rounded border border-transparent hover:border-[#555] bg-[#333]"
+                                                            >
+                                                                ← Atrás
+                                                            </button>
+                                                        )}
+                                                        {ci < 2 && (
+                                                            <button
+                                                                onClick={() => move(t, COLS[ci + 1].key)}
+                                                                className="text-[10px] text-blue-400 hover:text-blue-300 px-1.5 py-0.5 rounded border border-transparent hover:border-blue-900 bg-[#333]"
+                                                            >
+                                                                {ci === 0 ? 'Empezar →' : 'Completar →'}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <button
+                                                        onClick={() => remove(t)}
+                                                        className="text-[10px] text-gray-500 hover:text-red-400"
+                                                    >
+                                                        Eliminar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
             </div>
         </div>
     )

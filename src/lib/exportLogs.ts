@@ -63,6 +63,20 @@ export function exportExcel(profile: Profile, logs: ExportLog[]) {
     XLSX.utils.book_append_sheet(wb, resumen, 'Resumen')
     XLSX.utils.book_append_sheet(wb, bitacora, 'Bitácora')
     XLSX.utils.book_append_sheet(wb, semanas, 'Por semana')
+    
+    if (profile.availability_periods && profile.availability_periods.length > 0) {
+        const disponibilidades = XLSX.utils.json_to_sheet(
+            profile.availability_periods.map(p => ({
+                'Fecha Inicio': p.start_date,
+                'Fecha Fin': p.end_date || 'Indefinido',
+                'Horas por semana': Number(p.hours_per_week),
+                'Descripción': p.description || ''
+            }))
+        )
+        disponibilidades['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 40 }]
+        XLSX.utils.book_append_sheet(wb, disponibilidades, 'Disponibilidad')
+    }
+
     XLSX.writeFile(wb, 'informe-practica.xlsx')
 }
 
@@ -80,8 +94,26 @@ export function exportPdf(profile: Profile, logs: ExportLog[]) {
     doc.text(`Horas registradas: ${round(total)} de ${profile.required_hours} (${pct}%)`, 14, 46)
     doc.text(`Generado el ${today()}`, 14, 52)
 
+    if (profile.availability_periods && profile.availability_periods.length > 0) {
+        doc.text('Horarios configurados (Periodos)', 14, 62)
+        autoTable(doc, {
+            startY: 66,
+            head: [['Inicio', 'Fin', 'Horas/Semana', 'Descripción']],
+            body: profile.availability_periods.map(p => [
+                p.start_date,
+                p.end_date || 'Indefinido',
+                String(p.hours_per_week),
+                p.description || ''
+            ]),
+            headStyles: { fillColor: [100, 116, 139] },
+            styles: { fontSize: 9 },
+        })
+    }
+
+    const currentY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : 66
+
     autoTable(doc, {
-        startY: 58,
+        startY: currentY,
         head: [['Fecha', 'Categoría', 'Descripción', 'Modalidad', 'Horas']],
         body: logs.map((l) => [
             l.date,

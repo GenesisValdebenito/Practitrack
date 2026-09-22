@@ -17,6 +17,16 @@ export type AvatarConfig = {
     bgColor: string
 }
 
+export type AvailabilityPeriod = {
+    id: string
+    user_id: string
+    start_date: string
+    end_date: string | null
+    hours_per_week: number
+    description: string
+    details: any
+}
+
 export type Profile = {
     id: string
     full_name: string
@@ -32,6 +42,21 @@ export type Profile = {
     avatar_url?: string | null
     avatar_mode?: AvatarMode | null
     avatar_config?: AvatarConfig | null
+    availability_periods?: AvailabilityPeriod[]
+}
+
+export type Practice = {
+    id: string
+    user_id: string
+    name: string
+    institution?: string | null
+    career?: string | null
+    required_hours?: number | null
+    weekly_hours_target?: number | null
+    company?: string | null
+    supervisor?: string | null
+    start_date?: string | null
+    is_active: boolean
 }
 
 export type Shortcut = {
