@@ -1,15 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Profile, Shortcut, AvatarMode } from '../lib/utils'
-import {
-    COLOR_THEMES,
-    applyColorTheme,
-    applyThemeMode,
-    getStoredColor,
-    getStoredMode,
-    type ThemeMode,
-} from '../lib/theme'
+import { renderAvatarSvgUri } from '../lib/avatar'
+import { resetTheme } from '../lib/theme'
 
 const DEFAULT_SHORTCUTS: Shortcut[] = [
     { id: 'duoc', label: 'Portal Duoc', url: 'https://www.duoc.cl', icon: 'school' },
@@ -50,17 +44,22 @@ function Icon({ name, className = '' }: { name?: string; className?: string }) {
     }
 }
 
-// === Avatar de solo lectura (para el dropdown) ===
+// === Avatar (soporta notion con DiceBear) ===
 function AvatarDisplay({ profile, size = 'md' }: { profile: Profile; size?: 'sm' | 'md' | 'lg' }) {
     const sizeCls = size === 'sm' ? 'w-8 h-8 text-[10px]' : size === 'lg' ? 'w-16 h-16 text-xl' : 'w-10 h-10 text-sm'
     const mode: AvatarMode = profile.avatar_mode || (profile.avatar_url ? 'google' : 'initials')
 
-    if (mode === 'emoji' && profile.avatar_emoji) {
-        return (
-            <span className={`${sizeCls} rounded-full bg-brand-50 dark:bg-brand-900/40 flex items-center justify-center shrink-0`}>
-                <span className={size === 'lg' ? 'text-3xl' : 'text-lg'}>{profile.avatar_emoji}</span>
-            </span>
-        )
+    const notionSvg = useMemo(() => {
+        if (mode !== 'notion' || !profile.avatar_config) return null
+        try {
+            return renderAvatarSvgUri(profile.id, profile.avatar_config)
+        } catch {
+            return null
+        }
+    }, [mode, profile.avatar_config, profile.id])
+
+    if (notionSvg) {
+        return <img src={notionSvg} alt={profile.full_name} className={`${sizeCls} rounded-full object-cover shrink-0`} />
     }
     if ((mode === 'google' || mode === 'custom') && profile.avatar_url) {
         return <img src={profile.avatar_url} alt={profile.full_name} className={`${sizeCls} rounded-full object-cover shrink-0`} />
@@ -73,82 +72,23 @@ function AvatarDisplay({ profile, size = 'md' }: { profile: Profile; size?: 'sm'
     )
 }
 
-// === Panel de apariencia (solo tema + color) ===
-function AppearancePanel() {
-    const [mode, setMode] = useState<ThemeMode>(getStoredMode())
-    const [color, setColor] = useState(getStoredColor())
-
-    const changeMode = (m: ThemeMode) => {
-        setMode(m)
-        applyThemeMode(m)
-    }
-    const changeColor = (id: string) => {
-        setColor(id)
-        applyColorTheme(id)
-    }
-
-    const modes: { id: ThemeMode; label: string; icon: string }[] = [
-        { id: 'light', label: 'Claro', icon: 'sun' },
-        { id: 'dark', label: 'Oscuro', icon: 'moon' },
-        { id: 'system', label: 'Sistema', icon: 'monitor' },
-    ]
-
+// === Mini panel de apariencia (link a Perfil) ===
+function MiniAppearancePanel({ onNavigate }: { onNavigate: () => void }) {
     return (
-        <div className="px-3 py-3 space-y-4">
-            {/* Tema */}
-            <div>
-                <p className="text-[10px] font-medium text-muted uppercase tracking-wide mb-2">
-                    Tema
-                </p>
-                <div className="grid grid-cols-3 gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
-                    {modes.map((m) => (
-                        <button
-                            key={m.id}
-                            onClick={() => changeMode(m.id)}
-                            className={`flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-colors ${mode === m.id
-                                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-                                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                                }`}
-                        >
-                            <Icon name={m.icon} />
-                            <span className="hidden sm:inline">{m.label}</span>
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* Color principal */}
-            <div>
-                <p className="text-[10px] font-medium text-muted uppercase tracking-wide mb-2">
-                    Color
-                </p>
-                <div className="grid grid-cols-5 gap-2">
-                    {COLOR_THEMES.map((t) => (
-                        <button
-                            key={t.id}
-                            onClick={() => changeColor(t.id)}
-                            title={t.name}
-                            className={`w-7 h-7 rounded-full transition-transform hover:scale-110 relative ${color === t.id ? 'ring-2 ring-offset-2 ring-slate-400 dark:ring-offset-slate-900' : ''
-                                }`}
-                            style={{ backgroundColor: t.preview }}
-                        >
-                            {color === t.id && (
-                                <span className="absolute inset-0 flex items-center justify-center text-white">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                                </span>
-                            )}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* Link a Perfil para el avatar */}
+        <div className="px-3 py-3 space-y-3">
+            <p className="text-xs text-muted">
+                Personaliza el tema, la tipografía y el tamaño desde tu perfil.
+            </p>
             <Link
                 to="/perfil"
-                className="flex items-center justify-between px-2 py-1.5 rounded-lg text-xs text-secondary hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                onClick={onNavigate}
+                className="flex items-center justify-between px-3 py-2 rounded-lg text-sm bg-[var(--bg-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-primary"
             >
-                <span>Cambiar avatar</span>
-                <span className="text-muted">→</span>
+                <span className="flex items-center gap-2">
+                    <span className="text-muted"><Icon name="palette" /></span>
+                    Ir a Apariencia
+                </span>
+                <span className="text-muted"><Icon name="chevron-right" /></span>
             </Link>
         </div>
     )
@@ -166,14 +106,12 @@ export default function UserMenu({ profile, onUpdateProfile }: { profile: Profil
 
     void onUpdateProfile
 
-    // Detectar provider real
     useEffect(() => {
         supabase.auth.getUser().then(({ data }) => {
             setProvider(data.user?.app_metadata?.provider ?? null)
         })
     }, [])
 
-    // Cerrar al hacer clic afuera
     useEffect(() => {
         const onClick = (e: MouseEvent) => {
             if (ref.current && !ref.current.contains(e.target as Node)) {
@@ -185,6 +123,13 @@ export default function UserMenu({ profile, onUpdateProfile }: { profile: Profil
         document.addEventListener('mousedown', onClick)
         return () => document.removeEventListener('mousedown', onClick)
     }, [])
+
+    const handleSignOut = async () => {
+        await supabase.auth.signOut()
+        resetTheme()
+        await new Promise((r) => setTimeout(r, 50))
+        window.location.href = '/'
+    }
 
     const addShortcut = (e: React.FormEvent) => {
         e.preventDefault()
@@ -213,7 +158,7 @@ export default function UserMenu({ profile, onUpdateProfile }: { profile: Profil
                 className="flex items-center gap-2 rounded-full border border-[var(--border-soft)] bg-[var(--bg-card)] hover:bg-[var(--bg-subtle)] transition-colors p-0.5 pr-3"
             >
                 <AvatarDisplay profile={profile} size="sm" />
-                <span className="hidden sm:block text-xs font-medium max-w-[120px] truncate">
+                <span className="hidden sm:block text-xs font-medium max-w-[120px] truncate text-primary">
                     {profile.full_name?.split(' ')[0] || 'Usuario'}
                 </span>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
@@ -225,12 +170,11 @@ export default function UserMenu({ profile, onUpdateProfile }: { profile: Profil
                 <div className="absolute right-0 mt-2 w-80 bg-[var(--bg-card)] border border-[var(--border-soft)] rounded-xl shadow-lg shadow-black/5 overflow-hidden z-50 animate-slide-up">
                     {section === 'main' && (
                         <>
-                            {/* Cabecera */}
                             <div className="p-4 border-b border-[var(--border-soft)]">
                                 <div className="flex items-center gap-3">
                                     <AvatarDisplay profile={profile} size="md" />
                                     <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-semibold truncate">{profile.full_name || 'Usuario'}</p>
+                                        <p className="text-sm font-semibold truncate text-primary">{profile.full_name || 'Usuario'}</p>
                                         <p className="text-xs text-muted truncate">
                                             {profile.email || 'Sin correo vinculado'}
                                         </p>
@@ -250,11 +194,10 @@ export default function UserMenu({ profile, onUpdateProfile }: { profile: Profil
                                 )}
                             </div>
 
-                            {/* Apariencia */}
                             <div className="p-2">
                                 <button
                                     onClick={() => setSection('appearance')}
-                                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-[var(--bg-subtle)] transition-colors"
+                                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-[var(--bg-subtle)] transition-colors text-primary"
                                 >
                                     <span className="text-muted"><Icon name="palette" /></span>
                                     <span className="flex-1 text-left">Apariencia</span>
@@ -264,7 +207,6 @@ export default function UserMenu({ profile, onUpdateProfile }: { profile: Profil
 
                             <div className="border-t border-[var(--border-soft)]" />
 
-                            {/* Accesos directos */}
                             <div className="p-2">
                                 <div className="flex items-center justify-between px-2 py-1.5">
                                     <p className="text-[10px] font-medium text-muted uppercase tracking-wide">
@@ -291,7 +233,7 @@ export default function UserMenu({ profile, onUpdateProfile }: { profile: Profil
                                             href={s.url}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="flex-1 flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-[var(--bg-subtle)] transition-colors"
+                                            className="flex-1 flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-[var(--bg-subtle)] transition-colors text-primary"
                                         >
                                             <span className="text-muted"><Icon name={s.icon} /></span>
                                             <span className="truncate flex-1">{s.label}</span>
@@ -326,11 +268,7 @@ export default function UserMenu({ profile, onUpdateProfile }: { profile: Profil
                                             required
                                         />
                                         <div className="flex gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowAddShortcut(false)}
-                                                className="btn-ghost flex-1 text-xs"
-                                            >
+                                            <button type="button" onClick={() => setShowAddShortcut(false)} className="btn-ghost flex-1 text-xs">
                                                 Cancelar
                                             </button>
                                             <button type="submit" className="btn-primary flex-1 text-xs">
@@ -343,12 +281,11 @@ export default function UserMenu({ profile, onUpdateProfile }: { profile: Profil
 
                             <div className="border-t border-[var(--border-soft)]" />
 
-                            {/* Opciones */}
                             <div className="p-2">
                                 <Link
                                     to="/perfil"
                                     onClick={() => setOpen(false)}
-                                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-[var(--bg-subtle)] transition-colors"
+                                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-[var(--bg-subtle)] transition-colors text-primary"
                                 >
                                     <span className="text-muted"><Icon name="user" /></span>
                                     Mi perfil
@@ -356,7 +293,7 @@ export default function UserMenu({ profile, onUpdateProfile }: { profile: Profil
                                 <Link
                                     to="/datos"
                                     onClick={() => setOpen(false)}
-                                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-[var(--bg-subtle)] transition-colors"
+                                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-[var(--bg-subtle)] transition-colors text-primary"
                                 >
                                     <span className="text-muted"><Icon name="database" /></span>
                                     Importar / Exportar
@@ -367,8 +304,8 @@ export default function UserMenu({ profile, onUpdateProfile }: { profile: Profil
 
                             <div className="p-2">
                                 <button
-                                    onClick={() => supabase.auth.signOut()}
-                                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 transition-colors"
+                                    onClick={handleSignOut}
+                                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 transition-colors text-primary"
                                 >
                                     <span><Icon name="logout" /></span>
                                     Cerrar sesión
@@ -386,9 +323,9 @@ export default function UserMenu({ profile, onUpdateProfile }: { profile: Profil
                                 >
                                     <Icon name="chevron-left" />
                                 </button>
-                                <p className="text-sm font-semibold">Apariencia</p>
+                                <p className="text-sm font-semibold text-primary">Apariencia</p>
                             </div>
-                            <AppearancePanel />
+                            <MiniAppearancePanel onNavigate={() => setOpen(false)} />
                         </>
                     )}
                 </div>

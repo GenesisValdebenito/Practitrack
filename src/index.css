@@ -3,7 +3,8 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-    --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+    --font-sans: var(--app-font, "Inter", ui-sans-serif, system-ui, sans-serif);
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
     --color-brand-50: #eef2ff;
     --color-brand-100: #e0e7ff;
@@ -28,6 +29,12 @@
     --text-primary: #0f172a;
     --text-secondary: #475569;
     --text-muted: #94a3b8;
+
+    /* Preferencias de apariencia */
+    --app-font: "Inter", ui-sans-serif, system-ui, sans-serif;
+    --app-font-size: 14px;
+    --app-content-width: 64rem;
+    /* 1024px */
 }
 
 html.dark {
@@ -43,6 +50,9 @@ html.dark {
 }
 
 @layer base {
+    html {
+        font-size: var(--app-font-size);
+    }
 
     html,
     body {
@@ -51,7 +61,8 @@ html.dark {
     }
 
     body {
-        @apply font-sans antialiased;
+        font-family: var(--app-font);
+        @apply antialiased;
     }
 
     * {
@@ -115,6 +126,7 @@ html.dark ::-webkit-scrollbar-thumb:hover {
     background: #475569;
 }
 
+/* === Utilidades === */
 .input-base {
     width: 100%;
     border: 1px solid var(--border-soft);
@@ -191,4 +203,12 @@ html.dark ::-webkit-scrollbar-thumb:hover {
 
 .text-muted {
     color: var(--text-muted);
+}
+
+/* Ancho de contenido del main */
+.app-content {
+    max-width: var(--app-content-width);
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
 }

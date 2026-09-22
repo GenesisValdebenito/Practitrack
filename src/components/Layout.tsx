@@ -38,17 +38,18 @@ export default function Layout({ profile, refresh, onUpdateProfile }: LayoutProp
     const link = ({ isActive }: { isActive: boolean }) =>
         `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive
             ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300'
-            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100'
+            : 'text-secondary hover:bg-[var(--bg-subtle)] hover:text-primary'
         }`
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 md:flex">
-            <aside className="hidden md:flex md:w-60 flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-4 sticky top-0 h-screen">
+        <div className="min-h-screen bg-[var(--bg-app)] md:flex">
+            {/* Sidebar */}
+            <aside className="hidden md:flex md:w-60 flex-col bg-[var(--bg-card)] border-r border-[var(--border-soft)] p-4 sticky top-0 h-screen shrink-0">
                 <div className="flex items-center gap-2 mb-8">
-                    <div className="w-8 h-8 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-sm">
+                    <div className="w-8 h-8 rounded-lg bg-brand-600 text-[var(--color-brand-contrast)] flex items-center justify-center font-bold text-sm">
                         P
                     </div>
-                    <h1 className="text-lg font-semibold tracking-tight dark:text-slate-100">PractiTrack</h1>
+                    <h1 className="text-lg font-semibold tracking-tight text-primary">PractiTrack</h1>
                 </div>
 
                 <nav className="space-y-1 flex-1">
@@ -63,32 +64,36 @@ export default function Layout({ profile, refresh, onUpdateProfile }: LayoutProp
                     })}
                 </nav>
 
-                <div className="text-xs text-slate-400 dark:text-slate-500">
+                <div className="text-xs text-muted">
                     {profile.career} · {profile.institution}
                 </div>
             </aside>
 
+            {/* Contenido principal */}
             <div className="flex-1 flex flex-col min-w-0">
-                {/* Header con UserMenu */}
-                <header className="sticky top-0 z-30 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-sm border-b border-slate-200/60 dark:border-slate-800/60">
-                    <div className="max-w-5xl mx-auto flex items-center justify-between px-4 md:px-8 py-3">
+                <header className="sticky top-0 z-30 bg-[var(--bg-app)]/80 backdrop-blur-sm border-b border-[var(--border-soft)]">
+                    <div className="flex items-center justify-between px-4 md:px-6 py-3">
                         <div className="md:hidden flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-xs">
+                            <div className="w-7 h-7 rounded-lg bg-brand-600 text-[var(--color-brand-contrast)] flex items-center justify-center font-bold text-xs">
                                 P
                             </div>
-                            <span className="font-semibold text-sm dark:text-slate-100">PractiTrack</span>
+                            <span className="font-semibold text-sm text-primary">PractiTrack</span>
                         </div>
                         <div className="hidden md:block" />
                         <UserMenu profile={profile} onUpdateProfile={onUpdateProfile} />
                     </div>
                 </header>
 
-                <main className="flex-1 p-4 md:p-8 pb-24 md:pb-8 max-w-5xl w-full mx-auto">
-                    <Outlet context={{ profile, refresh }} />
+                {/* El main usa .app-content que respeta --app-content-width */}
+                <main className="flex-1 w-full px-4 md:px-8 py-6 pb-24 md:pb-8">
+                    <div className="app-content">
+                        <Outlet context={{ profile, refresh }} />
+                    </div>
                 </main>
             </div>
 
-            <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex justify-around py-2 z-40">
+            {/* Bottom nav móvil */}
+            <nav className="md:hidden fixed bottom-0 inset-x-0 bg-[var(--bg-card)] border-t border-[var(--border-soft)] flex justify-around py-2 z-40">
                 {NAV.map((n) => {
                     const Icon = n.icon
                     return (
@@ -97,7 +102,7 @@ export default function Layout({ profile, refresh, onUpdateProfile }: LayoutProp
                             to={n.to}
                             end={n.to === '/'}
                             className={({ isActive }) =>
-                                `flex flex-col items-center gap-0.5 text-[10px] ${isActive ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 dark:text-slate-500'
+                                `flex flex-col items-center gap-0.5 text-[10px] ${isActive ? 'text-brand-600 dark:text-brand-400' : 'text-muted'
                                 }`
                             }
                         >
