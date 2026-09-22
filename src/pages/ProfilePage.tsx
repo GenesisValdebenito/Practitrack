@@ -1,65 +1,142 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useProfile } from '../hooks/useProfile'
-import {
-    COLOR_THEMES,
-    applyColorTheme,
-    applyThemeMode,
-    getStoredColor,
-    getStoredMode,
-    AVATAR_EMOJIS,
-    type ThemeMode,
-} from '../lib/theme'
-import type { AvatarMode, Profile } from '../lib/utils'
+import { AvatarBuilder } from '../components/AvatarBuilder'
+import { Accordion } from '../components/Accordion'
+import AppearancePanel from '../components/AppearancePanel'
+import { renderAvatarSvgUri } from '../lib/avatar'
+import { COLOR_THEMES, getStoredMode, getStoredColor } from '../lib/theme'
+import type { Profile } from '../lib/utils'
+
+type Tab = 'apariencia' | 'cuenta' | 'practica' | 'metas'
 
 export default function ProfilePage() {
     const { profile, loading, refresh } = useProfile()
-    const [saving, setSaving] = useState(false)
-    const [saved, setSaved] = useState(false)
+    const [tab, setTab] = useState<Tab>('apariencia')
 
-    // Guardia de carga: no renderizamos hasta tener profile
     if (loading || !profile) {
         return (
-            <div className="space-y-6 max-w-2xl animate-pulse">
-                <div className="h-8 w-48 bg-slate-200 dark:bg-slate-800 rounded" />
-                <div className="h-32 bg-slate-200 dark:bg-slate-800 rounded-xl" />
-                <div className="h-64 bg-slate-200 dark:bg-slate-800 rounded-xl" />
+            <div className="space-y-6 animate-pulse">
+                <div className="h-8 w-48 bg-[var(--bg-subtle)] rounded" />
+                <div className="h-12 bg-[var(--bg-subtle)] rounded" />
+                <div className="h-64 bg-[var(--bg-subtle)] rounded-xl" />
             </div>
         )
     }
 
-    return <ProfileContent profile={profile} refresh={refresh} saving={saving} setSaving={setSaving} saved={saved} setSaved={setSaved} />
+    const tabs: { id: Tab; label: string }[] = [
+        { id: 'apariencia', label: 'Apariencia' },
+        { id: 'cuenta', label: 'Cuenta' },
+        { id: 'practica', label: 'Práctica' },
+        { id: 'metas', label: 'Metas' },
+    ]
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h1 className="text-2xl font-semibold tracking-tight text-primary">Perfil</h1>
+                <p className="text-sm text-secondary mt-1">
+                    Personaliza tu cuenta y tus datos de práctica.
+                </p>
+            </div>
+
+            <div className="border-b border-[var(--border-soft)]">
+                <div className="flex gap-6 overflow-x-auto">
+                    {tabs.map((t) => (
+                        <button
+                            key={t.id}
+                            onClick={() => setTab(t.id)}
+                            className={`pb-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${tab === t.id
+                                    ? 'border-brand-600 text-brand-600 dark:text-brand-400 dark:border-brand-400'
+                                    : 'border-transparent text-muted hover:text-primary'
+                                }`}
+                        >
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {tab === 'apariencia' && <AparienciaTab profile={profile} refresh={refresh} />}
+            {tab === 'cuenta' && <CuentaTab profile={profile} refresh={refresh} />}
+            {tab === 'practica' && <PracticaTab profile={profile} refresh={refresh} />}
+            {tab === 'metas' && <MetasTab profile={profile} refresh={refresh} />}
+        </div>
+    )
 }
 
-// Componente separado para que los hooks se declaren siempre después de la guardia
-function ProfileContent({
-    profile,
-    refresh,
-    saving,
-    setSaving,
-    saved,
-    setSaved,
-}: {
-    profile: Profile
-    refresh: () => void
-    saving: boolean
-    setSaving: (v: boolean) => void
-    saved: boolean
-    setSaved: (v: boolean) => void
-}) {
+function AparienciaTab({ profile, refresh }: { profile: Profile; refresh: () => void }) {
+    const avatarMode = profile.avatar_mode || 'initials'
+    const avatarConfig = profile.avatar_config || null
+
+    const avatarSummary = (
+        <div className="flex items-center gap-3">
+            <AvatarMini profile={profile} />
+            <span className="text-xs text-muted">
+                {avatarMode === 'notion' && avatarConfig && 'Avatar personalizado'}
+                {avatarMode === 'google' && 'Foto de Google'}
+                {avatarMode === 'custom' && 'Foto subida'}
+                {avatarMode === 'initials' && 'Iniciales'}
+            </span>
+        </div>
+    )
+
+    const themeSummary = (
+        <div className="flex items-center gap-2 text-xs text-muted">
+            <span>
+                {getStoredMode() === 'dark' ? '🌙 Oscuro' : getStoredMode() === 'light' ? '☀️ Claro' : '💻 Sistema'}
+            </span>
+            <span>·</span>
+            <span className="flex items-center gap-1.5">
+                <span
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: COLOR_THEMES.find((t) => t.id === getStoredColor())?.preview }}
+                />
+                {COLOR_THEMES.find((t) => t.id === getStoredColor())?.name}
+            </span>
+        </div>
+    )
+
+    return (
+        <div className="space-y-3">
+            <Accordion title="Avatar" summary={avatarSummary}>
+                <AvatarBuilder profile={profile} onUpdate={refresh} />
+            </Accordion>
+
+            <Accordion title="Apariencia" summary={themeSummary}>
+                <AppearancePanel />
+            </Accordion>
+        </div>
+    )
+}
+
+function AvatarMini({ profile }: { profile: Profile }) {
+    const mode = profile.avatar_mode || (profile.avatar_url ? 'google' : 'initials')
+    const initials = (profile.full_name || 'U').split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
+
+    if (mode === 'notion' && profile.avatar_config) {
+        try {
+            const uri = renderAvatarSvgUri(profile.id, profile.avatar_config)
+            return <img src={uri} alt="" className="w-8 h-8 rounded-full" />
+        } catch { }
+    }
+    if ((mode === 'google' || mode === 'custom') && profile.avatar_url) {
+        return <img src={profile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+    }
+    return (
+        <span className="w-8 h-8 rounded-full bg-brand-600 text-[var(--color-brand-contrast)] font-semibold flex items-center justify-center text-[10px]">
+            {initials}
+        </span>
+    )
+}
+
+function CuentaTab({ profile, refresh }: { profile: Profile; refresh: () => void }) {
+    const [saving, setSaving] = useState(false)
+    const [saved, setSaved] = useState(false)
     const [form, setForm] = useState({
         full_name: profile.full_name ?? '',
-        career: profile.career ?? '',
-        institution: profile.institution ?? '',
-        company: profile.company ?? '',
-        supervisor: profile.supervisor ?? '',
-        start_date: profile.start_date ?? '',
-        required_hours: profile.required_hours ?? 360,
-        weekly_hours_target: profile.weekly_hours_target ?? 28,
+        email: profile.email ?? '',
     })
-
-    const set = (k: keyof typeof form, v: string | number) =>
-        setForm((f) => ({ ...f, [k]: v }))
 
     const save = async () => {
         setSaving(true)
@@ -75,101 +152,15 @@ function ProfileContent({
     }
 
     return (
-        <div className="space-y-6 max-w-2xl">
-            <div>
-                <h1 className="text-2xl font-semibold tracking-tight">Perfil</h1>
-                <p className="text-sm text-secondary mt-1">
-                    Personaliza tu cuenta y tus datos de práctica.
-                </p>
-            </div>
-
-            {/* === SECCIÓN AVATAR === */}
-            <section className="card">
-                <h2 className="font-semibold text-sm mb-4">Avatar</h2>
-                <AvatarSection profile={profile} refresh={refresh} />
-            </section>
-
-            {/* === SECCIÓN APARIENCIA === */}
-            <section className="card">
-                <h2 className="font-semibold text-sm mb-4">Apariencia</h2>
-                <AppearanceSection />
-            </section>
-
-            {/* === DATOS PERSONALES === */}
+        <div className="space-y-4">
             <section className="card space-y-4">
-                <h2 className="font-semibold text-sm">Datos personales</h2>
-                <Field
-                    label="Nombre completo"
-                    value={form.full_name}
-                    onChange={(v) => set('full_name', v)}
-                    placeholder="Génesis Valdebenito"
-                />
-                <div className="grid md:grid-cols-2 gap-4">
-                    <Field
-                        label="Carrera"
-                        value={form.career}
-                        onChange={(v) => set('career', v)}
-                        placeholder="Ingeniería en Informática"
-                    />
-                    <Field
-                        label="Institución"
-                        value={form.institution}
-                        onChange={(v) => set('institution', v)}
-                        placeholder="Duoc UC"
-                    />
-                </div>
+                <h2 className="font-semibold text-sm text-primary">Datos de la cuenta</h2>
+                <Field label="Nombre completo" value={form.full_name} onChange={(v) => setForm({ ...form, full_name: v })} placeholder="Génesis Valdebenito" />
+                <Field label="Correo electrónico" value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder="tu@correo.cl" type="email" />
             </section>
-
-            {/* === DATOS DE LA PRÁCTICA === */}
-            <section className="card space-y-4">
-                <h2 className="font-semibold text-sm">Datos de la práctica</h2>
-                <Field
-                    label="Empresa o institución"
-                    value={form.company}
-                    onChange={(v) => set('company', v)}
-                    placeholder="Nombre de la empresa"
-                />
-                <div className="grid md:grid-cols-2 gap-4">
-                    <Field
-                        label="Supervisor"
-                        value={form.supervisor}
-                        onChange={(v) => set('supervisor', v)}
-                        placeholder="Nombre del supervisor"
-                    />
-                    <Field
-                        label="Fecha de inicio"
-                        type="date"
-                        value={form.start_date}
-                        onChange={(v) => set('start_date', v)}
-                    />
-                </div>
-            </section>
-
-            {/* === METAS === */}
-            <section className="card space-y-4">
-                <h2 className="font-semibold text-sm">Metas</h2>
-                <div className="grid md:grid-cols-2 gap-4">
-                    <Field
-                        label="Horas totales requeridas"
-                        type="number"
-                        value={form.required_hours}
-                        onChange={(v) => set('required_hours', Number(v))}
-                    />
-                    <Field
-                        label="Meta semanal (h)"
-                        type="number"
-                        value={form.weekly_hours_target}
-                        onChange={(v) => set('weekly_hours_target', Number(v))}
-                    />
-                </div>
-            </section>
-
-            {/* Guardar */}
-            <div className="flex items-center justify-between gap-4 sticky bottom-4">
-                <p className="text-xs text-muted">
-                    {saved ? '✓ Cambios guardados' : 'Los cambios se aplican a tu cuenta.'}
-                </p>
-                <button onClick={save} disabled={saving} className="btn-primary shadow-lg">
+            <div className="flex items-center justify-between gap-4">
+                <p className="text-xs text-muted">{saved ? '✓ Cambios guardados' : 'Los cambios se aplican a tu cuenta.'}</p>
+                <button onClick={save} disabled={saving} className="btn-primary">
                     {saving ? 'Guardando...' : 'Guardar cambios'}
                 </button>
             </div>
@@ -177,196 +168,97 @@ function ProfileContent({
     )
 }
 
-// === Editor de avatar ===
-function AvatarSection({ profile, refresh }: { profile: Profile; refresh: () => void }) {
-    const mode: AvatarMode = profile.avatar_mode || (profile.avatar_url ? 'google' : 'initials')
-    const initials = (profile.full_name || 'U').split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
+function PracticaTab({ profile, refresh }: { profile: Profile; refresh: () => void }) {
+    const [saving, setSaving] = useState(false)
+    const [saved, setSaved] = useState(false)
+    const [form, setForm] = useState({
+        career: profile.career ?? '',
+        institution: profile.institution ?? '',
+        company: profile.company ?? '',
+        supervisor: profile.supervisor ?? '',
+        start_date: profile.start_date ?? '',
+    })
 
-    const update = async (patch: Partial<Profile>) => {
+    const save = async () => {
+        setSaving(true)
+        setSaved(false)
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
-            await supabase.from('profiles').update(patch).eq('id', user.id)
-            refresh()
+            await supabase.from('profiles').update(form).eq('id', user.id)
         }
-    }
-
-    const uploadAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]
-        if (!file) return
-        const reader = new FileReader()
-        reader.onload = () => update({ avatar_url: reader.result as string, avatar_mode: 'custom' })
-        reader.readAsDataURL(file)
+        setSaving(false)
+        setSaved(true)
+        refresh()
+        setTimeout(() => setSaved(false), 2500)
     }
 
     return (
-        <div className="space-y-5">
-            {/* Vista previa grande */}
-            <div className="flex items-center gap-5">
-                <div className="shrink-0">
-                    {mode === 'emoji' && profile.avatar_emoji ? (
-                        <div className="w-20 h-20 rounded-full bg-brand-50 dark:bg-brand-900/30 flex items-center justify-center text-4xl">
-                            {profile.avatar_emoji}
-                        </div>
-                    ) : (mode === 'google' || mode === 'custom') && profile.avatar_url ? (
-                        <img
-                            src={profile.avatar_url}
-                            alt={profile.full_name}
-                            className="w-20 h-20 rounded-full object-cover"
-                        />
-                    ) : (
-                        <div className="w-20 h-20 rounded-full bg-brand-600 text-white font-semibold text-2xl flex items-center justify-center">
-                            {initials}
-                        </div>
-                    )}
+        <div className="space-y-4">
+            <section className="card space-y-4">
+                <h2 className="font-semibold text-sm text-primary">Datos académicos</h2>
+                <div className="grid md:grid-cols-2 gap-4">
+                    <Field label="Carrera" value={form.career} onChange={(v) => setForm({ ...form, career: v })} placeholder="Ingeniería en Informática" />
+                    <Field label="Institución" value={form.institution} onChange={(v) => setForm({ ...form, institution: v })} placeholder="Duoc UC" />
                 </div>
-                <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{profile.full_name || 'Usuario'}</p>
-                    <p className="text-xs text-muted truncate">{profile.email || 'Sin correo'}</p>
-                    <p className="text-xs text-muted mt-1">
-                        {mode === 'google' && 'Foto de Google'}
-                        {mode === 'custom' && 'Foto personalizada'}
-                        {mode === 'emoji' && 'Personaje'}
-                        {mode === 'initials' && 'Iniciales'}
-                    </p>
+            </section>
+            <section className="card space-y-4">
+                <h2 className="font-semibold text-sm text-primary">Datos de la práctica</h2>
+                <Field label="Empresa o institución" value={form.company} onChange={(v) => setForm({ ...form, company: v })} placeholder="Nombre de la empresa" />
+                <div className="grid md:grid-cols-2 gap-4">
+                    <Field label="Supervisor" value={form.supervisor} onChange={(v) => setForm({ ...form, supervisor: v })} placeholder="Nombre del supervisor" />
+                    <Field label="Fecha de inicio" type="date" value={form.start_date} onChange={(v) => setForm({ ...form, start_date: v })} />
                 </div>
-            </div>
-
-            {/* Opciones */}
-            <div className="space-y-2">
-                {profile.avatar_url && mode !== 'custom' && (
-                    <button
-                        onClick={() => update({ avatar_mode: 'google' })}
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${mode === 'google'
-                            ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300'
-                            : 'hover:bg-slate-100 dark:hover:bg-slate-800'
-                            }`}
-                    >
-                        <span className="text-muted">✓</span>
-                        Usar foto de Google
-                    </button>
-                )}
-
-                <label className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
-                    <span className="text-muted">↑</span>
-                    Subir imagen propia
-                    <input type="file" accept="image/*" className="hidden" onChange={uploadAvatar} />
-                </label>
-
-                <button
-                    onClick={() => update({ avatar_mode: 'initials' })}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${mode === 'initials'
-                        ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300'
-                        : 'hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }`}
-                >
-                    <span className="text-muted">Aa</span>
-                    Usar iniciales ({initials})
+            </section>
+            <div className="flex items-center justify-between gap-4">
+                <p className="text-xs text-muted">{saved ? '✓ Cambios guardados' : 'Los cambios se aplican a tu práctica.'}</p>
+                <button onClick={save} disabled={saving} className="btn-primary">
+                    {saving ? 'Guardando...' : 'Guardar cambios'}
                 </button>
-
-                {(profile.avatar_url || profile.avatar_emoji) && (
-                    <button
-                        onClick={() => update({ avatar_url: null, avatar_emoji: null, avatar_mode: 'initials' })}
-                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                    >
-                        <span>✕</span>
-                        Eliminar avatar
-                    </button>
-                )}
-            </div>
-
-            {/* Emojis */}
-            <div>
-                <p className="text-xs font-medium text-secondary mb-2">Elegir personaje</p>
-                <div className="grid grid-cols-8 gap-2">
-                    {AVATAR_EMOJIS.map((e) => (
-                        <button
-                            key={e}
-                            onClick={() => update({ avatar_emoji: e, avatar_mode: 'emoji' })}
-                            className={`aspect-square rounded-lg text-xl flex items-center justify-center transition-all ${profile.avatar_emoji === e && mode === 'emoji'
-                                ? 'bg-brand-100 dark:bg-brand-900/40 ring-2 ring-brand-500 scale-105'
-                                : 'bg-slate-50 dark:bg-slate-800 hover:scale-110'
-                                }`}
-                        >
-                            {e}
-                        </button>
-                    ))}
-                </div>
             </div>
         </div>
     )
 }
 
-// === Sección de apariencia ===
-function AppearanceSection() {
-    const [mode, setMode] = useState<ThemeMode>(getStoredMode())
-    const [color, setColor] = useState(getStoredColor())
+function MetasTab({ profile, refresh }: { profile: Profile; refresh: () => void }) {
+    const [saving, setSaving] = useState(false)
+    const [saved, setSaved] = useState(false)
+    const [form, setForm] = useState({
+        required_hours: profile.required_hours ?? 360,
+        weekly_hours_target: profile.weekly_hours_target ?? 28,
+    })
 
-    const changeMode = (m: ThemeMode) => {
-        setMode(m)
-        applyThemeMode(m)
+    const save = async () => {
+        setSaving(true)
+        setSaved(false)
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+            await supabase.from('profiles').update(form).eq('id', user.id)
+        }
+        setSaving(false)
+        setSaved(true)
+        refresh()
+        setTimeout(() => setSaved(false), 2500)
     }
-    const changeColor = (id: string) => {
-        setColor(id)
-        applyColorTheme(id)
-    }
-
-    const modes: { id: ThemeMode; label: string }[] = [
-        { id: 'light', label: 'Claro' },
-        { id: 'dark', label: 'Oscuro' },
-        { id: 'system', label: 'Sistema' },
-    ]
 
     return (
-        <div className="space-y-5">
-            {/* Tema */}
-            <div>
-                <p className="text-xs font-medium text-secondary mb-2">Tema</p>
-                <div className="grid grid-cols-3 gap-2">
-                    {modes.map((m) => (
-                        <button
-                            key={m.id}
-                            onClick={() => changeMode(m.id)}
-                            className={`py-2 rounded-lg text-sm font-medium transition-colors ${mode === m.id
-                                ? 'bg-brand-600 text-[var(--color-brand-contrast)]'
-                                : 'bg-slate-100 dark:bg-slate-800 text-secondary hover:bg-slate-200 dark:hover:bg-slate-700'
-                                }`}
-                        >
-                            {m.label}
-                        </button>
-                    ))}
+        <div className="space-y-4">
+            <section className="card space-y-4">
+                <h2 className="font-semibold text-sm text-primary">Metas de práctica</h2>
+                <div className="grid md:grid-cols-2 gap-4">
+                    <Field label="Horas totales requeridas" type="number" value={form.required_hours} onChange={(v) => setForm({ ...form, required_hours: Number(v) })} />
+                    <Field label="Meta semanal (h)" type="number" value={form.weekly_hours_target} onChange={(v) => setForm({ ...form, weekly_hours_target: Number(v) })} />
                 </div>
-            </div>
-
-            {/* Color */}
-            <div>
-                <p className="text-xs font-medium text-secondary mb-2">Color principal</p>
-                <div className="grid grid-cols-5 gap-3">
-                    {COLOR_THEMES.map((t) => (
-                        <button
-                            key={t.id}
-                            onClick={() => changeColor(t.id)}
-                            title={t.name}
-                            className={`aspect-square rounded-full transition-transform hover:scale-110 relative ${color === t.id ? 'ring-2 ring-offset-2 ring-slate-400 dark:ring-offset-slate-900' : ''
-                                }`}
-                            style={{ backgroundColor: t.preview }}
-                        >
-                            {color === t.id && (
-                                <span className="absolute inset-0 flex items-center justify-center text-white text-lg font-bold drop-shadow">
-                                    ✓
-                                </span>
-                            )}
-                        </button>
-                    ))}
-                </div>
-                <p className="text-xs text-muted mt-2">
-                    {COLOR_THEMES.find((t) => t.id === color)?.name}
-                </p>
+            </section>
+            <div className="flex items-center justify-between gap-4">
+                <p className="text-xs text-muted">{saved ? '✓ Cambios guardados' : 'Los cambios se aplican a tu dashboard.'}</p>
+                <button onClick={save} disabled={saving} className="btn-primary">
+                    {saving ? 'Guardando...' : 'Guardar cambios'}
+                </button>
             </div>
         </div>
     )
 }
 
-// === Campo de formulario ===
 function Field({
     label,
     value,

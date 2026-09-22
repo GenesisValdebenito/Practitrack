@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { resetTheme } from '../lib/theme'
 
 export default function Login() {
     const [email, setEmail] = useState('')
@@ -7,6 +8,11 @@ export default function Login() {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
     const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+
+    // Forzar tema neutro al entrar al login
+    useEffect(() => {
+        resetTheme()
+    }, [])
 
     const submit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -28,21 +34,20 @@ export default function Login() {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
+        <div className="min-h-screen flex items-center justify-center p-4 bg-[var(--bg-app)]">
             <div className="w-full max-w-sm animate-slide-up">
-                {/* Logo */}
                 <div className="flex items-center justify-center gap-2 mb-8">
-                    <div className="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center font-bold">
+                    <div className="w-10 h-10 rounded-xl bg-brand-600 text-[var(--color-brand-contrast)] flex items-center justify-center font-bold">
                         P
                     </div>
-                    <h1 className="text-2xl font-semibold tracking-tight">PractiTrack</h1>
+                    <h1 className="text-2xl font-semibold tracking-tight text-primary">PractiTrack</h1>
                 </div>
 
                 <div className="card">
-                    <h2 className="text-lg font-semibold mb-1">
+                    <h2 className="text-lg font-semibold mb-1 text-primary">
                         {mode === 'signin' ? 'Inicia sesión' : 'Crea tu cuenta'}
                     </h2>
-                    <p className="text-sm text-slate-500 mb-6">
+                    <p className="text-sm text-secondary mb-6">
                         {mode === 'signin'
                             ? 'Continúa registrando tus horas de práctica.'
                             : 'Comienza a organizar tu práctica profesional.'}
@@ -50,7 +55,7 @@ export default function Login() {
 
                     <form onSubmit={submit} className="space-y-3">
                         <div>
-                            <label className="text-xs font-medium text-slate-600 mb-1 block">
+                            <label className="text-xs font-medium text-secondary mb-1 block">
                                 Correo electrónico
                             </label>
                             <input
@@ -63,7 +68,7 @@ export default function Login() {
                             />
                         </div>
                         <div>
-                            <label className="text-xs font-medium text-slate-600 mb-1 block">
+                            <label className="text-xs font-medium text-secondary mb-1 block">
                                 Contraseña
                             </label>
                             <input
@@ -78,7 +83,7 @@ export default function Login() {
                         </div>
 
                         {error && (
-                            <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                            <p className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900 rounded-lg px-3 py-2">
                                 {error}
                             </p>
                         )}
@@ -90,16 +95,16 @@ export default function Login() {
 
                     <div className="relative my-5">
                         <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-slate-200" />
+                            <div className="w-full border-t border-[var(--border-soft)]" />
                         </div>
                         <div className="relative flex justify-center">
-                            <span className="bg-white px-2 text-xs text-slate-400">o</span>
+                            <span className="bg-[var(--bg-card)] px-2 text-xs text-muted">o</span>
                         </div>
                     </div>
 
                     <button
                         onClick={google}
-                        className="w-full border border-slate-200 rounded-lg px-4 py-2 text-sm font-medium hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+                        className="w-full border border-[var(--border-soft)] rounded-lg px-4 py-2 text-sm font-medium hover:bg-[var(--bg-subtle)] transition-colors flex items-center justify-center gap-2 text-primary"
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24">
                             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -110,7 +115,7 @@ export default function Login() {
                         Continuar con Google
                     </button>
 
-                    <p className="text-xs text-center text-slate-500 mt-6">
+                    <p className="text-xs text-center text-muted mt-6">
                         {mode === 'signin' ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?'}{' '}
                         <button
                             onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
@@ -121,7 +126,7 @@ export default function Login() {
                     </p>
                 </div>
 
-                <p className="text-xs text-center text-slate-400 mt-6">
+                <p className="text-xs text-center text-muted mt-6">
                     PractiTrack · Práctica profesional
                 </p>
             </div>
