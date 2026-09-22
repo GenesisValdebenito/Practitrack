@@ -1,6 +1,5 @@
 export type ThemeMode = 'light' | 'dark' | 'system'
-
-export type AvatarMode = 'google' | 'custom' | 'emoji' | 'initials' | 'notion'
+export type AvatarMode = 'google' | 'custom' | 'initials' | 'notion'
 
 export type AvatarConfig = {
     skin: string
@@ -9,7 +8,12 @@ export type AvatarConfig = {
     eyes: string
     eyebrows: string
     mouth: string
-    accessories: string | null
+    accessories: string
+    accessoriesColor: string
+    facialHair: string
+    facialHairColor: string
+    clothe: string
+    clothesColor: string
     bgColor: string
 }
 
@@ -27,7 +31,6 @@ export type Profile = {
     email?: string | null
     avatar_url?: string | null
     avatar_mode?: AvatarMode | null
-    avatar_emoji?: string | null
     avatar_config?: AvatarConfig | null
 }
 

@@ -16,18 +16,15 @@ export function useProfile() {
             return
         }
 
-        // 1) Fila de profiles (datos propios de PractiTrack)
         const { data: row } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', user.id)
             .maybeSingle()
 
-        // 2) Metadata del provider (Google, email/password, etc.)
         const meta = user.user_metadata || {}
         const provider = user.app_metadata?.provider
 
-        // 3) Foto de Google (Supabase guarda el campo como 'picture' o 'avatar_url')
         const googleAvatar =
             meta.avatar_url ||
             meta.picture ||
@@ -39,25 +36,22 @@ export function useProfile() {
             user.email?.split('@')[0] ||
             'Usuario'
 
-        // 4) Combinar: profiles locales > auth
         const merged: Profile = {
             id: user.id,
-            full_name: row?.full_name ?? googleFullName,
-            career: row?.career ?? '',
-            institution: row?.institution ?? '',
+            full_name: row?.full_name?.trim() || googleFullName,
+            career: row?.career?.trim() || '',
+            institution: row?.institution?.trim() || '',
             required_hours: row?.required_hours ?? 360,
             weekly_hours_target: row?.weekly_hours_target ?? 28,
             onboarded: row?.onboarded ?? false,
-            company: row?.company ?? null,
-            supervisor: row?.supervisor ?? null,
-            start_date: row?.start_date ?? null,
-            email: row?.email ?? user.email ?? null,
-            // Avatar: si el usuario guardó uno propio, respétalo. Si no, usa el de Google.
-            avatar_url: row?.avatar_url ?? googleAvatar ?? null,
-            avatar_mode: row?.avatar_mode ?? (googleAvatar ? 'google' : 'initials'),
-            avatar_emoji: row?.avatar_emoji ?? null,
-            // Nuevos campos para el builder de avatares tipo Notion
-            avatar_config: row?.avatar_config ?? null,
+            company: row?.company?.trim() || null,
+            supervisor: row?.supervisor?.trim() || null,
+            start_date: row?.start_date || null,
+            // 👇 clave: usar || en vez de ?? para ignorar strings vacíos
+            email: row?.email?.trim() || user.email || null,
+            avatar_url: row?.avatar_url || googleAvatar || null,
+            avatar_mode: row?.avatar_mode || (googleAvatar ? 'google' : 'initials'),
+            avatar_config: row?.avatar_config || null,
         }
 
         setProfile(merged)
