@@ -8,6 +8,7 @@ import Login from './pages/Login'
 import Onboarding from './pages/Onboarding'
 import Dashboard from './pages/Dashboard'
 import Schedule from './pages/Schedule'
+import Stickys from './pages/Stickys'
 import Tasks from './pages/Tasks'
 import Data from './pages/Data'
 import ProfilePage from './pages/ProfilePage'
@@ -90,6 +91,7 @@ export default function App() {
           <Route path="/horario" element={<Schedule />} />
           <Route path="/tareas" element={<Tasks />} />
           <Route path="/datos" element={<Data />} />
+          <Route path="/pizarra" element={<Stickys />} />
           <Route path="/perfil" element={<ProfilePage />} />
           <Route path="/configuracion" element={<ConfigPage />} />
           <Route path="*" element={<Navigate to="/" />} />
