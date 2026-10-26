@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import type { Profile, Practice } from '../lib/utils'
 import UserMenu from './UserMenu'
+import QuickLogWidget from './QuickLogWidget'
 
 const NAV = [
     { to: '/', label: 'Dashboard', icon: IconDashboard },
     { to: '/horario', label: 'Horario', icon: IconCalendar },
     { to: '/tareas', label: 'Stickys', icon: IconCheck },
-    { to: '/bitacora', label: 'Registros', icon: IconBook },
     { to: '/datos', label: 'Datos', icon: IconFolder },
 ]
 
@@ -19,9 +19,6 @@ function IconCalendar({ className = '' }: { className?: string }) {
 }
 function IconCheck({ className = '' }: { className?: string }) {
     return <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
-}
-function IconBook({ className = '' }: { className?: string }) {
-    return <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
 }
 function IconFolder({ className = '' }: { className?: string }) {
     return <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>
@@ -45,7 +42,7 @@ type LayoutProps = {
 export default function Layout({ profile, refresh, onUpdateProfile, practices = [], activePracticeId, setActivePracticeId }: LayoutProps) {
     const [dropdownOpen, setDropdownOpen] = useState(false)
     const activePractice = practices.find(p => p.id === activePracticeId)
-    
+
     void refresh
 
     const link = ({ isActive }: { isActive: boolean }) =>
@@ -79,7 +76,7 @@ export default function Layout({ profile, refresh, onUpdateProfile, practices = 
                         )
                     })}
                 </nav>
-                
+
                 <div className="mt-auto">
                     <NavLink to="/configuracion" className={link}>
                         {({ isActive }) => (
@@ -108,7 +105,7 @@ export default function Layout({ profile, refresh, onUpdateProfile, practices = 
                     {/* Header Desktop (simula el top bar de la imagen) */}
                     <div className="hidden md:flex items-start justify-between px-8 py-6 w-full shrink-0 relative">
                         <div className="flex items-center gap-1 relative">
-                            <h2 
+                            <h2
                                 className="text-md font-medium text-[var(--text-secondary)] cursor-pointer flex items-center gap-1 hover:text-[var(--text-primary)]"
                                 onClick={() => setDropdownOpen(!dropdownOpen)}
                             >
@@ -117,7 +114,7 @@ export default function Layout({ profile, refresh, onUpdateProfile, practices = 
                             {dropdownOpen && (
                                 <div className="absolute top-full left-0 mt-1 w-56 bg-[var(--bg-card)] border border-[var(--border-soft)] rounded shadow-xl py-1 z-50">
                                     {practices.map(p => (
-                                        <button 
+                                        <button
                                             key={p.id}
                                             className={`w-full text-left px-4 py-2 text-sm hover:bg-[var(--bg-hover)] transition-colors ${p.id === activePracticeId ? 'text-brand-500 font-medium' : 'text-[var(--text-primary)]'}`}
                                             onClick={() => {
@@ -129,7 +126,7 @@ export default function Layout({ profile, refresh, onUpdateProfile, practices = 
                                         </button>
                                     ))}
                                     <div className="border-t border-[var(--border-soft)] mt-1">
-                                        <button 
+                                        <button
                                             className="w-full text-left px-4 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-2"
                                             onClick={() => {
                                                 // Aquí podríamos ir a una vista de Crear Práctica
@@ -142,7 +139,7 @@ export default function Layout({ profile, refresh, onUpdateProfile, practices = 
                                 </div>
                             )}
                         </div>
-                        
+
                         <div className="flex items-center gap-6">
                             <div className="flex flex-col items-center">
                                 <span className="text-xl font-medium">0</span>
@@ -157,7 +154,7 @@ export default function Layout({ profile, refresh, onUpdateProfile, practices = 
                                 <span className="absolute -bottom-4 text-[10px] text-[var(--text-muted)] uppercase">Attend</span>
                             </div>
                         </div>
-                        
+
                         <div className="ml-8">
                             <UserMenu profile={profile} onUpdateProfile={onUpdateProfile} />
                         </div>
@@ -191,6 +188,9 @@ export default function Layout({ profile, refresh, onUpdateProfile, practices = 
                     )
                 })}
             </nav>
+
+            {/* Bloque flotante para agregar actividades (se oculta en perfil y configuración) */}
+            <QuickLogWidget />
         </div>
     )
 }

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { useProfile } from '../hooks/useProfile'
 import { fmt, weekStart } from '../lib/utils'
+import { LOGS_CHANGED_EVENT, OPEN_QUICKLOG_EVENT } from '../components/QuickLogWidget'
 
 type Log = { date: string; hours_worked: number; task_description: string }
 
@@ -11,12 +12,22 @@ export default function Dashboard() {
     const [logs, setLogs] = useState<Log[]>([])
     const [pending, setPending] = useState(0)
 
-    useEffect(() => {
+    const loadLogs = useCallback(() => {
         supabase.from('work_logs').select('date,hours_worked,task_description').order('date', { ascending: false })
             .then(({ data }) => setLogs(data ?? []))
+    }, [])
+
+    // Se recarga cuando el bloque flotante guarda una actividad
+    useEffect(() => {
+        window.addEventListener(LOGS_CHANGED_EVENT, loadLogs)
+        return () => window.removeEventListener(LOGS_CHANGED_EVENT, loadLogs)
+    }, [loadLogs])
+
+    useEffect(() => {
+        loadLogs()
         supabase.from('tasks').select('id', { count: 'exact', head: true }).neq('status', 'done')
             .then(({ count }) => setPending(count ?? 0))
-    }, [])
+    }, [loadLogs])
 
     const streak = useMemo(() => {
         const days = new Set(logs.map((l) => l.date))
@@ -70,11 +81,11 @@ export default function Dashboard() {
     }
 
     const required = profile.required_hours ?? 360
-    
+
     const todayStr = new Date().toISOString().slice(0, 10)
     const activePeriod = profile.availability_periods?.find(p => p.start_date <= todayStr && (!p.end_date || p.end_date >= todayStr))
     const target = activePeriod ? Number(activePeriod.hours_per_week) : (profile.weekly_hours_target ?? 28)
-    
+
     const total = logs.reduce((s, l) => s + Number(l.hours_worked), 0)
     const percent = required > 0 ? Math.min((total / required) * 100, 100) : 0
     const remaining = Math.max(required - total, 0)
@@ -91,7 +102,7 @@ export default function Dashboard() {
         while (rem > 0 && safety < 1000) {
             safety++
             const currentStr = currentDay.toISOString().slice(0, 10)
-            const active = profile.availability_periods.find(p => 
+            const active = profile.availability_periods.find(p =>
                 p.start_date <= currentStr && (!p.end_date || p.end_date >= currentStr)
             )
             const dailyHours = active ? (Number(active.hours_per_week) / 7) : (target / 7)
@@ -247,12 +258,13 @@ export default function Dashboard() {
                 {logs.length === 0 ? (
                     <div className="text-center py-8">
                         <p className="text-sm text-muted mb-3">Aún no hay registros.</p>
-                        <a
-                            href="/bitacora"
+                        <button
+                            type="button"
+                            onClick={() => window.dispatchEvent(new Event(OPEN_QUICKLOG_EVENT))}
                             className="inline-block text-xs btn-primary"
                         >
                             Registrar mi primera hora
-                        </a>
+                        </button>
                     </div>
                 ) : (
                     <ul className="space-y-0">

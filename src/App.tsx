@@ -9,7 +9,6 @@ import Onboarding from './pages/Onboarding'
 import Dashboard from './pages/Dashboard'
 import Schedule from './pages/Schedule'
 import Tasks from './pages/Tasks'
-import Logs from './pages/Logs'
 import Data from './pages/Data'
 import ProfilePage from './pages/ProfilePage'
 import ConfigPage from './pages/ConfigPage.tsx';
@@ -90,7 +89,6 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/horario" element={<Schedule />} />
           <Route path="/tareas" element={<Tasks />} />
-          <Route path="/bitacora" element={<Logs />} />
           <Route path="/datos" element={<Data />} />
           <Route path="/perfil" element={<ProfilePage />} />
           <Route path="/configuracion" element={<ConfigPage />} />
