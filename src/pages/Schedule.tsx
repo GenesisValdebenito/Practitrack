@@ -51,10 +51,10 @@ function dateToString(date: Date) {
     return `${year}-${month}-${day}`
 }
 
-function parseDate(value: string) {
-    const [year, month, day] = value.split('-').map(Number)
-    return new Date(year, month - 1, day, 12)
-}
+// function parseDate(value: string) {
+//     const [year, month, day] = value.split('-').map(Number)
+//     return new Date(year, month - 1, day, 12)
+// }
 
 function addDays(date: Date, amount: number) {
     const result = new Date(date)
@@ -356,8 +356,8 @@ export default function Schedule() {
             <div
                 key={block.id}
                 className={`group rounded-lg border-l-4 p-2 ${block.is_in_person
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40'
-                        : 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40'
+                    : 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40'
                     }`}
             >
                 <p className="text-xs font-semibold text-primary">
@@ -475,8 +475,8 @@ export default function Schedule() {
                                     type="button"
                                     onClick={() => setView(value)}
                                     className={`rounded-md px-3 py-2 text-sm ${view === value
-                                            ? 'bg-[var(--bg-card)] font-semibold text-primary shadow-sm'
-                                            : 'text-secondary hover:text-primary'
+                                        ? 'bg-[var(--bg-card)] font-semibold text-primary shadow-sm'
+                                        : 'text-secondary hover:text-primary'
                                         }`}
                                 >
                                     {label}
@@ -529,8 +529,8 @@ export default function Schedule() {
                                             <div
                                                 key={block.id}
                                                 className={`truncate rounded px-1 py-1 text-[9px] sm:text-[10px] ${block.is_in_person
-                                                        ? 'bg-blue-100 text-blue-900 dark:bg-blue-900/50 dark:text-blue-100'
-                                                        : 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/50 dark:text-emerald-100'
+                                                    ? 'bg-blue-100 text-blue-900 dark:bg-blue-900/50 dark:text-blue-100'
+                                                    : 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/50 dark:text-emerald-100'
                                                     }`}
                                             >
                                                 {block.start_time.slice(0, 5)} {block.title}
@@ -568,8 +568,8 @@ export default function Schedule() {
                                             {DAYS[index]}
                                         </p>
                                         <p className={`mt-1 text-lg font-semibold ${dateToString(date) === dateToString(new Date())
-                                                ? 'text-blue-600 dark:text-blue-300'
-                                                : 'text-primary'
+                                            ? 'text-blue-600 dark:text-blue-300'
+                                            : 'text-primary'
                                             }`}>
                                             {date.getDate()}
                                         </p>
@@ -761,8 +761,8 @@ export default function Schedule() {
                                     type="button"
                                     onClick={() => setForm({ ...form, is_in_person: true })}
                                     className={`rounded-lg border px-3 py-2 text-sm font-medium ${form.is_in_person
-                                            ? 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-200'
-                                            : 'border-[var(--border-soft)]'
+                                        ? 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-200'
+                                        : 'border-[var(--border-soft)]'
                                         }`}
                                 >
                                     Presencial
@@ -771,8 +771,8 @@ export default function Schedule() {
                                     type="button"
                                     onClick={() => setForm({ ...form, is_in_person: false })}
                                     className={`rounded-lg border px-3 py-2 text-sm font-medium ${!form.is_in_person
-                                            ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
-                                            : 'border-[var(--border-soft)]'
+                                        ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
+                                        : 'border-[var(--border-soft)]'
                                         }`}
                                 >
                                     Remoto

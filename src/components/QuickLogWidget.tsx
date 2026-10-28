@@ -75,11 +75,11 @@ export default function QuickLogWidget() {
     return (
         // El contenedor no captura clics: solo el botón y el panel son interactivos,
         // así el resto de la plataforma sigue usable mientras el bloque está abierto.
-        <div className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-50 flex flex-col items-end gap-3 pointer-events-none">
+        <div className="fixed bottom-[4.5rem] right-4 md:bottom-6 md:right-6 z-40 flex flex-col items-end gap-3 pointer-events-none">
             {open && (
                 <form
                     onSubmit={submit}
-                    className="pointer-events-auto w-[min(22rem,calc(100vw-2rem))] max-h-[calc(100vh-8rem)] overflow-y-auto bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-soft)] rounded-xl shadow-2xl p-4 space-y-3 animate-slide-up"
+                    className="pointer-events-auto w-[min(22rem,calc(100vw-2rem))] max-h-[calc(100vh-10rem)] overflow-y-auto bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-soft)] rounded-xl shadow-2xl p-4 space-y-3 animate-slide-up"
                     role="dialog"
                     aria-label="Agregar actividad"
                 >
