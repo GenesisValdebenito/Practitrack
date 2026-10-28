@@ -211,3 +211,88 @@ html.dark ::-webkit-scrollbar-thumb:hover {
     margin-left: auto;
     margin-right: auto;
 }
+
+
+/* === Responsividad global de PractiTrack === */
+
+/* Evita que el padding y los bordes aumenten el ancho de los elementos. */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+/* Permite que las pantallas y sus hijos se encojan correctamente. */
+#root,
+main,
+main>div,
+main>div>div,
+.app-content {
+    min-width: 0;
+    max-width: 100%;
+}
+
+img,
+svg,
+video,
+canvas {
+    max-width: 100%;
+}
+
+/* Los textos largos no deben empujar las tarjetas fuera de su contenedor. */
+.card,
+.panel-subtle {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+input,
+select,
+textarea {
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* Las cuadrículas deben permitir que sus columnas realmente se encojan. */
+.responsive-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit,
+            minmax(min(100%, 15rem), 1fr));
+    gap: 1rem;
+    min-width: 0;
+    width: 100%;
+}
+
+.responsive-grid>* {
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* Ayuda a que los botones se distribuyan en espacios pequeños. */
+.responsive-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+/* Ajustes de espaciado para ventanas pequeñas. */
+@media (max-width: 480px) {
+    .card {
+        padding: 0.875rem;
+    }
+
+    .responsive-actions>button {
+        max-width: 100%;
+    }
+}
+
+/* Permite que los componentes adapten su contenido al ancho de su contenedor. */
+@supports (container-type: inline-size) {
+    .responsive-container {
+        container-type: inline-size;
+        min-width: 0;
+        max-width: 100%;
+    }
+}
