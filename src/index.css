@@ -299,6 +299,7 @@ textarea {
 
 /* === Estilos para Impresión de Informes === */
 @media print {
+
     aside,
     header,
     nav,
@@ -328,4 +329,4 @@ textarea {
     .print-only {
         display: block !important;
     }
-}
+}
