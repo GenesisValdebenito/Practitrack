@@ -712,3 +712,164 @@
         transition-duration: 0.01ms !important;
     }
 }
+
+
+/* ==========================================
+   PIZARRA — INTEGRACIÓN CON TEMA GLOBAL
+   ========================================== */
+
+.pizarra-page {
+    --pizarra-blue: var(--color-brand-600);
+    --pizarra-text: var(--text-primary);
+    --pizarra-muted: var(--text-secondary);
+    --pizarra-border: var(--border-soft);
+
+    background: var(--bg-app);
+    color: var(--text-primary);
+
+    /* Adaptarse al espacio disponible del Layout */
+    height: 100%;
+    min-height: 600px;
+}
+
+/* Encabezado */
+.pizarra-heading-icon,
+.pizarra-empty-icon {
+    background: var(--bg-subtle);
+    color: var(--color-brand-500);
+}
+
+.pizarra-help b {
+    color: var(--text-primary);
+}
+
+/* Buscador, formularios y botones */
+.pizarra-search,
+.pizarra-field input,
+.pizarra-field textarea,
+.pizarra-button:not(.pizarra-button-primary),
+.pizarra-editor-close {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border-color: var(--border-soft);
+}
+
+.pizarra-search::placeholder,
+.pizarra-field input::placeholder,
+.pizarra-field textarea::placeholder {
+    color: var(--text-muted);
+}
+
+.pizarra-button:not(.pizarra-button-primary):hover,
+.pizarra-editor-close:hover {
+    background: var(--bg-hover);
+}
+
+/* Conservar botones principales azules */
+.pizarra-button-primary {
+    background: var(--color-brand-600);
+    border-color: var(--color-brand-600);
+    color: #ffffff;
+}
+
+.pizarra-button-primary:hover {
+    background: var(--color-brand-700);
+    color: #ffffff;
+}
+
+/* Lienzo */
+.pizarra-board {
+    border-color: var(--border-soft);
+    background-color: var(--bg-subtle);
+    background-image:
+        radial-gradient(var(--border-strong) 1px, transparent 1px);
+}
+
+/* Controles de zoom */
+.pizarra-zoom-controls {
+    background: var(--bg-card);
+    border-color: var(--border-soft);
+}
+
+.pizarra-zoom-controls button,
+.pizarra-zoom-controls span {
+    color: var(--text-primary);
+}
+
+.pizarra-zoom-controls button:hover {
+    background: var(--bg-hover);
+}
+
+.pizarra-zoom-controls .pizarra-zoom-divider {
+    background: var(--border-soft);
+}
+
+/* Editor de notas */
+.pizarra-editor {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border-color: var(--border-soft);
+}
+
+.pizarra-field > span {
+    color: var(--text-secondary);
+}
+
+.pizarra-editor-footer {
+    border-color: var(--border-soft);
+}
+
+.pizarra-image-preview {
+    background: var(--bg-subtle);
+    border-color: var(--border-soft);
+}
+
+/* Mantener las notas adhesivas legibles */
+.pizarra-note {
+    color: #30313a;
+}
+
+.pizarra-note-title,
+.pizarra-note-content {
+    color: inherit;
+}
+
+/* Ajustes adicionales del modo oscuro */
+html.dark .pizarra-page {
+    --pizarra-muted: var(--text-secondary);
+}
+
+html.dark .pizarra-board {
+    background-color: #242424;
+    background-image:
+        radial-gradient(#454545 1px, transparent 1px);
+}
+
+html.dark .pizarra-heading-icon {
+    background: #29354b;
+    color: #93b4ff;
+}
+
+html.dark .pizarra-note {
+    box-shadow: 0 8px 22px #00000045;
+}
+
+html.dark .pizarra-note-actions button {
+    color: #30313a;
+}
+
+html.dark .pizarra-empty-state h2 {
+    color: var(--text-primary);
+}
+
+html.dark .pizarra-image-preview img {
+    background: #ffffff;
+}
+
+/* Responsive */
+@media (max-width: 720px) {
+    .pizarra-page {
+        min-height: 500px;
+        padding: 14px;
+    }
+}

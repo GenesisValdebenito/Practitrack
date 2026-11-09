@@ -313,9 +313,9 @@ export default function Layout({ profile, refresh, onUpdateProfile, practices = 
                     )}
                 </header>
 
-                <main className="flex-1 w-full flex flex-col h-screen overflow-hidden">
+                <main className="flex-1 w-full min-h-0 flex flex-col overflow-hidden">
                     {/* Header Desktop con indicadores circulares de arco */}
-                    <div className="hidden md:flex items-center justify-between px-8 py-4 w-full shrink-0 border-b border-[var(--border-soft)] bg-[var(--bg-app)]">
+                   <div className="hidden md:flex items-center justify-between gap-6 px-8 py-5 min-h-[104px] w-full shrink-0 border-b border-[var(--border-soft)] bg-[var(--bg-app)]">
                         <div className="flex items-center gap-2 relative">
                             <h2
                                 className="text-sm font-semibold text-primary cursor-pointer flex items-center gap-1.5 hover:text-brand-600 transition"
@@ -399,7 +399,7 @@ export default function Layout({ profile, refresh, onUpdateProfile, practices = 
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-24 md:pb-8 flex justify-center">
+                    <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-8 pt-6 md:pt-8 pb-24 md:pb-8 flex justify-center">
                         <div className="w-full transition-all duration-300" style={{ maxWidth: 'var(--app-content-width, 72rem)' }}>
                             <Outlet context={{ profile, refresh }} />
                         </div>

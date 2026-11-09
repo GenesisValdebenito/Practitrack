@@ -235,9 +235,9 @@ function AppRoutes() {
                 }
             >
                 <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/horario" element={<Schedule />} />
-                <Route path="/tareas" element={<Tasks />} />
-                <Route path="/datos" element={<Data />} />
+                <Route path="/horario" element={<Schedule activePracticeId={activePracticeId} />} />
+                <Route path="/tareas" element={<Tasks activePracticeId={activePracticeId} />} />
+                <Route path="/datos" element={<Data activePracticeId={activePracticeId} />} />
                 <Route path="/pizarra" element={<Stickys />} />
                 <Route path="/perfil" element={<ProfilePage />} />
                 <Route path="/configuracion" element={<ConfigPage />} />
