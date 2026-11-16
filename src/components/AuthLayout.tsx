@@ -11,8 +11,7 @@ type AuthLayoutProps = {
 
 export default function AuthLayout({
     children,
-    footer,
-    wide = false,
+    footer
 }: AuthLayoutProps) {
     return (
         <main className="relative flex min-h-screen w-full overflow-hidden bg-[#070b14]">
