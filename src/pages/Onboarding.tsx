@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Profile } from '../lib/utils'
 import CareerAutocomplete from '../components/CareerAutocomplete'
+import iconPractitrack from '../assets/practitrack-logo.png'
 
 type OnboardingProps = {
     userId?: string
@@ -125,7 +126,7 @@ export default function Onboarding({
             <div className="max-w-2xl mx-auto">
                 <div className="text-center mb-9">
                     <img
-                        src="/icon-practitrack.png"
+                        src={iconPractitrack}
                         alt=""
                         className="w-14 h-14 object-contain mx-auto mb-5"
                     />

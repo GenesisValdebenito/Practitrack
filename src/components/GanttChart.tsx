@@ -114,7 +114,8 @@ export default function GanttChart({ tasks }: Props) {
 
     return (
         <section className="min-w-0 space-y-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+
+            <div className="flex flex-col gap-3">
                 <div>
                     <h2 className="text-lg font-semibold">
                         Carta Gantt
@@ -124,46 +125,53 @@ export default function GanttChart({ tasks }: Props) {
                     </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={() => setOffset(0)}
-                        className="btn-ghost border border-[var(--border-soft)]"
-                    >
-                        Hoy
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => setOffset((value) => value - weeks)}
-                        className="btn-ghost border border-[var(--border-soft)]"
-                        aria-label="Periodo anterior"
-                    >
-                        ←
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => setOffset((value) => value + weeks)}
-                        className="btn-ghost border border-[var(--border-soft)]"
-                        aria-label="Periodo siguiente"
-                    >
-                        →
-                    </button>
-
+                <div className="flex flex-wrap items-center justify-between gap-2">
                     <select
                         aria-label="Semanas visibles"
                         value={weeks}
-                        onChange={(event) => setWeeks(Number(event.target.value))}
-                        className="input-base w-auto"
+                        onChange={(event) =>
+                            setWeeks(Number(event.target.value))
+                        }
+                        className="input-base !w-auto min-w-[125px] max-w-[150px] shrink-0"
                     >
                         <option value={4}>4 semanas</option>
                         <option value={8}>8 semanas</option>
                         <option value={12}>12 semanas</option>
                         <option value={16}>16 semanas</option>
                     </select>
+
+                    <div className="flex shrink-0 items-center gap-1.5">
+                        <button
+                            type="button"
+                            onClick={() => setOffset((value) => value - weeks)}
+                            className="btn-ghost flex h-10 w-10 items-center justify-center border border-[var(--border-soft)] !p-0"
+                            aria-label="Período anterior"
+                            title="Período anterior"
+                        >
+                            ←
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setOffset(0)}
+                            className="btn-ghost flex h-10 items-center justify-center border border-[var(--border-soft)] px-4"
+                        >
+                            Hoy
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setOffset((value) => value + weeks)}
+                            className="btn-ghost flex h-10 w-10 items-center justify-center border border-[var(--border-soft)] !p-0"
+                            aria-label="Período siguiente"
+                            title="Período siguiente"
+                        >
+                            →
+                        </button>
+                    </div>
                 </div>
             </div>
+
 
             <p className="text-xs text-[var(--text-muted)]">
                 Las barras comienzan provisionalmente en la fecha de creación

@@ -1,5 +1,6 @@
 
 import { Link } from 'react-router-dom'
+import iconPractitrack from '../assets/practitrack-logo.png'
 
 const features = [
     {
@@ -31,7 +32,7 @@ export default function Landing() {
                 <div className="max-w-7xl mx-auto px-5 sm:px-8 h-20 flex items-center justify-between">
                     <Link to="/" className="flex items-center gap-3">
                         <img
-                            src="/icon-practitrack.png"
+                            src={iconPractitrack}
                             alt=""
                             className="w-10 h-10 object-contain"
                         />
@@ -246,7 +247,7 @@ export default function Landing() {
             <footer className="bg-white border-t border-slate-200 px-5 sm:px-8 py-10">
                 <div className="max-w-7xl mx-auto flex flex-col sm:flex-row gap-6 justify-between items-start sm:items-center">
                     <div className="flex items-center gap-3">
-                        <img src="/icon-practitrack.png" alt="" className="w-9 h-9 object-contain" />
+                        <img src={iconPractitrack} alt="" className="w-9 h-9 object-contain" />
                         <div>
                             <p className="font-bold text-[#101F3A]">PractiTrack</p>
                             <p className="text-xs text-slate-500">Tu práctica, más organizada.</p>

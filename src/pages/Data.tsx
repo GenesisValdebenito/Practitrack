@@ -1,11 +1,11 @@
 
-import { useEffect, useState, useRef, useMemo } from 'react'
-import { parseFile, downloadTemplate } from '../lib/importLogs'
+import { useEffect, useMemo, useState } from 'react'
 import { exportExcel, exportPdf } from '../lib/exportLogs'
 import { supabase } from '../lib/supabase'
 import { useProfile } from '../hooks/useProfile'
 import { LOGS_CHANGED_EVENT } from '../components/QuickLogWidget'
 import TaskTrash from '../components/TaskTrash'
+import DataImporter from '../components/DataImporter'
 
 type DataProps = {
     activePracticeId: string | null
@@ -20,194 +20,248 @@ type Log = {
     is_in_person: boolean
 }
 
-const CATEGORIES = ['Todas', 'Desarrollo', 'Reunión', 'Documentación', 'Investigación', 'Testing', 'Otro']
+type ModalityFilter = 'all' | 'in_person' | 'remote'
+
+const CATEGORIES = [
+    'Todas',
+    'Desarrollo',
+    'Reunión',
+    'Documentación',
+    'Investigación',
+    'Testing',
+    'Otro',
+]
 
 export default function Data({ activePracticeId }: DataProps) {
     const { profile } = useProfile()
+
     const [logs, setLogs] = useState<Log[]>([])
     const [loadingLogs, setLoadingLogs] = useState(true)
-    const [preview, setPreview] = useState<any[] | null>(null)
-    const [fileName, setFileName] = useState('')
-    const [error, setError] = useState('')
-    const [importing, setImporting] = useState(false)
-    const [success, setSuccess] = useState('')
-    const fileInput = useRef<HTMLInputElement>(null)
 
-    // Filtros de búsqueda para datos actuales
+    // Filtros
     const [searchQuery, setSearchQuery] = useState('')
     const [selectedCategory, setSelectedCategory] = useState('Todas')
-    const [selectedModality, setSelectedModality] = useState<'all' | 'in_person' | 'remote'>('all')
-    const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
+    const [selectedModality, setSelectedModality] =
+        useState<ModalityFilter>('all')
+    const [sortOrder, setSortOrder] =
+        useState<'desc' | 'asc'>('desc')
     const [showOnlyLatest5, setShowOnlyLatest5] = useState(true)
 
-    // Modal de edición de registro
+    // Edición y eliminación
     const [editingLog, setEditingLog] = useState<Log | null>(null)
     const [savingEdit, setSavingEdit] = useState(false)
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const [showTrash, setShowTrash] = useState(false)
-
-    const fetchLogs = async () => {
-        setLoadingLogs(true)
-
-        const { data, error: err } = await supabase
-            .from('work_logs')
-            .select('*')
-            .order('date', { ascending: false })
-
-        if (!err && data) {
-            setLogs(data)
-        }
-
-        setLoadingLogs(false)
-    }
+    const [loadError, setLoadError] = useState('')
 
     useEffect(() => {
-        fetchLogs()
-    }, [])
+        let cancelled = false
 
-    // Importación de archivos
-    const handleFile = async (file: File) => {
-        setError('')
-        setSuccess('')
-        setFileName(file.name)
+        const loadLogs = async () => {
+            setLoadingLogs(true)
+            setLoadError('')
 
-        try {
-            const rows = await parseFile(file)
-            setPreview(rows.slice(0, 10))
-        } catch (e: any) {
-            setError(e.message ?? 'No se pudo leer el archivo.')
-            setPreview(null)
+            const {
+                data: { user },
+                error: authError,
+            } = await supabase.auth.getUser()
+
+            if (cancelled) return
+
+            if (authError || !user) {
+                setLogs([])
+                setLoadError('No se pudo verificar tu sesión.')
+                setLoadingLogs(false)
+                return
+            }
+
+            let query = supabase
+                .from('work_logs')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('date', { ascending: false })
+
+            if (activePracticeId) {
+                query = query.eq('practice_id', activePracticeId)
+            } else {
+                setLogs([])
+                setLoadingLogs(false)
+                return
+            }
+
+            const { data, error } = await query
+
+            if (cancelled) return
+
+            if (error) {
+                setLoadError(error.message)
+                setLogs([])
+            } else {
+                setLogs((data ?? []) as Log[])
+            }
+
+            setLoadingLogs(false)
         }
-    }
 
-    const onDrop = (e: React.DragEvent) => {
-        e.preventDefault()
-        const file = e.dataTransfer.files[0]
+        void loadLogs()
 
-        if (file) handleFile(file)
-    }
-
-    const confirmImport = async () => {
-        if (!preview) return
-
-        setImporting(true)
-        setError('')
-
-        try {
-            const { data: { user } } = await supabase.auth.getUser()
-
-            const rows = preview.map((r: any) => ({
-                user_id: user!.id,
-                date: r.date,
-                hours_worked: r.hours_worked,
-                task_description: r.task_description,
-                category: r.category ?? 'Otro',
-                is_in_person: r.is_in_person ?? false,
-            }))
-
-            const { error } = await supabase.from('work_logs').insert(rows)
-
-            if (error) throw error
-
-            setSuccess(`${rows.length} registros importados correctamente.`)
-            setPreview(null)
-            setFileName('')
-
-            await fetchLogs()
-            window.dispatchEvent(new Event(LOGS_CHANGED_EVENT))
-        } catch (e: any) {
-            setError(e.message ?? 'Error al importar.')
-        } finally {
-            setImporting(false)
+        return () => {
+            cancelled = true
         }
-    }
+    }, [activePracticeId])
 
     // Guardar edición
     const handleSaveEdit = async (e: React.FormEvent) => {
         e.preventDefault()
+        if (!editingLog || !activePracticeId) return
 
-        if (!editingLog) return
+        if (
+            !editingLog.task_description.trim() ||
+            !editingLog.date ||
+            !Number.isFinite(Number(editingLog.hours_worked)) ||
+            Number(editingLog.hours_worked) <= 0 ||
+            Number(editingLog.hours_worked) > 24
+        ) {
+            alert('Revisa la descripción, fecha y horas (mayores que 0 y hasta 24).')
+            return
+        }
 
         setSavingEdit(true)
 
         try {
-            const { error: err } = await supabase
+            const {
+                data: { user },
+                error: authError,
+            } = await supabase.auth.getUser()
+
+            if (authError || !user) {
+                throw new Error('Sesión no disponible.')
+            }
+
+            const { data, error } = await supabase
                 .from('work_logs')
                 .update({
                     date: editingLog.date,
                     hours_worked: Number(editingLog.hours_worked),
-                    task_description: editingLog.task_description,
+                    task_description: editingLog.task_description.trim(),
                     category: editingLog.category,
                     is_in_person: editingLog.is_in_person,
                 })
                 .eq('id', editingLog.id)
+                .eq('user_id', user.id)
+                .eq('practice_id', activePracticeId)
+                .select('id')
 
-            if (err) throw err
+            if (error) throw error
+            if (!data?.length) {
+                throw new Error('No se encontró el registro para actualizar.')
+            }
 
-            setLogs((prev) =>
-                prev.map((l) => (l.id === editingLog.id ? editingLog : l))
+            setLogs(prev =>
+                prev.map(log =>
+                    log.id === editingLog.id
+                        ? { ...editingLog }
+                        : log
+                )
             )
 
             setEditingLog(null)
             window.dispatchEvent(new Event(LOGS_CHANGED_EVENT))
-        } catch (err: any) {
-            alert('Error al guardar: ' + (err.message || 'Inténtalo de nuevo'))
+        } catch (error) {
+            alert(
+                'Error al guardar: ' +
+                (error instanceof Error ? error.message : 'Inténtalo de nuevo.')
+            )
         } finally {
             setSavingEdit(false)
         }
     }
 
-    // Eliminar registro de bitácora
+    // Eliminar registro
     const handleDeleteLog = async (id: string) => {
-        if (!window.confirm('¿Estás seguro de que deseas eliminar este registro?')) return
+        if (!activePracticeId) return
+
+        if (!window.confirm(
+            '¿Estás seguro de que deseas eliminar este registro de bitácora?'
+        )) {
+            return
+        }
 
         setDeletingId(id)
 
         try {
-            const { error: err } = await supabase
+            const {
+                data: { user },
+                error: authError,
+            } = await supabase.auth.getUser()
+
+            if (authError || !user) {
+                throw new Error('Sesión no disponible.')
+            }
+
+            const { data, error } = await supabase
                 .from('work_logs')
                 .delete()
                 .eq('id', id)
+                .eq('user_id', user.id)
+                .eq('practice_id', activePracticeId)
+                .select('id')
 
-            if (err) throw err
+            if (error) throw error
+            if (!data?.length) {
+                throw new Error('No se encontró el registro para eliminar.')
+            }
 
-            setLogs((prev) => prev.filter((l) => l.id !== id))
+            setLogs(prev => prev.filter(log => log.id !== id))
             window.dispatchEvent(new Event(LOGS_CHANGED_EVENT))
-        } catch (err: any) {
-            alert('Error al eliminar: ' + (err.message || 'Inténtalo de nuevo'))
+        } catch (error) {
+            alert(
+                'Error al eliminar: ' +
+                (error instanceof Error ? error.message : 'Inténtalo de nuevo.')
+            )
         } finally {
             setDeletingId(null)
         }
     }
 
-    // Métricas calculadas
+    // Métricas
     const metrics = useMemo(() => {
         const totalHours = logs.reduce(
-            (sum, l) => sum + Number(l.hours_worked || 0),
+            (sum, log) => sum + Number(log.hours_worked || 0),
             0
         )
 
         const inPersonHours = logs
-            .filter((l) => l.is_in_person)
-            .reduce((sum, l) => sum + Number(l.hours_worked || 0), 0)
+            .filter(log => log.is_in_person)
+            .reduce(
+                (sum, log) => sum + Number(log.hours_worked || 0),
+                0
+            )
 
         const remoteHours = totalHours - inPersonHours
         const requiredHours = profile?.required_hours || 360
+
         const percentage = requiredHours > 0
             ? Math.min((totalHours / requiredHours) * 100, 100)
             : 0
 
-        const remainingHours = Math.max(0, requiredHours - totalHours)
+        const remainingHours = Math.max(
+            0,
+            requiredHours - totalHours
+        )
 
-        // Agrupación por categoría
-        const byCategory = logs.reduce((acc, l) => {
-            const cat = l.category || 'Otro'
-            acc[cat] = (acc[cat] || 0) + Number(l.hours_worked || 0)
+        const byCategory = logs.reduce((acc, log) => {
+            const category = log.category || 'Otro'
+            acc[category] =
+                (acc[category] || 0) +
+                Number(log.hours_worked || 0)
             return acc
         }, {} as Record<string, number>)
 
-        // Días únicos trabajados
-        const uniqueDays = new Set(logs.map((l) => l.date)).size
+        const uniqueDays = new Set(
+            logs.map(log => log.date)
+        ).size
+
         const avgPerDay = uniqueDays > 0
             ? (totalHours / uniqueDays).toFixed(1)
             : '0'
@@ -226,145 +280,136 @@ export default function Data({ activePracticeId }: DataProps) {
         }
     }, [logs, profile])
 
-    // Filtrado de logs para la tabla
+    // Filtros de bitácora
     const filteredLogs = useMemo(() => {
-        const result = logs
-            .filter((log) => {
+        return [...logs]
+            .filter(log => {
                 if (
                     selectedCategory !== 'Todas' &&
                     log.category !== selectedCategory
-                ) return false
+                ) {
+                    return false
+                }
 
                 if (
                     selectedModality === 'in_person' &&
                     !log.is_in_person
-                ) return false
+                ) {
+                    return false
+                }
 
                 if (
                     selectedModality === 'remote' &&
                     log.is_in_person
-                ) return false
+                ) {
+                    return false
+                }
 
-                if (searchQuery.trim()) {
-                    const q = searchQuery.toLowerCase()
-                    const matchDesc = log.task_description?.toLowerCase().includes(q)
-                    const matchDate = log.date?.includes(q)
-                    const matchCat = log.category?.toLowerCase().includes(q)
+                const query = searchQuery.trim().toLowerCase()
 
-                    if (!matchDesc && !matchDate && !matchCat) return false
+                if (query) {
+                    const matchesDescription =
+                        log.task_description?.toLowerCase().includes(query)
+
+                    const matchesDate = log.date?.includes(query)
+
+                    const matchesCategory =
+                        log.category?.toLowerCase().includes(query)
+
+                    if (
+                        !matchesDescription &&
+                        !matchesDate &&
+                        !matchesCategory
+                    ) {
+                        return false
+                    }
                 }
 
                 return true
             })
-            .sort((a, b) => {
-                if (sortOrder === 'asc') {
-                    return a.date.localeCompare(b.date)
-                }
+            .sort((a, b) =>
+                sortOrder === 'asc'
+                    ? a.date.localeCompare(b.date)
+                    : b.date.localeCompare(a.date)
+            )
+    }, [
+        logs,
+        selectedCategory,
+        selectedModality,
+        searchQuery,
+        sortOrder,
+    ])
 
-                return b.date.localeCompare(a.date)
-            })
-
-        return result
-    }, [logs, selectedCategory, selectedModality, searchQuery, sortOrder])
-
-    const displayedLogs = useMemo(() => {
-        if (showOnlyLatest5) {
-            return filteredLogs.slice(0, 5)
-        }
-
-        return filteredLogs
-    }, [filteredLogs, showOnlyLatest5])
-
-    const handlePrintSummary = () => {
-        window.print()
-    }
+    const displayedLogs = useMemo(
+        () => showOnlyLatest5
+            ? filteredLogs.slice(0, 5)
+            : filteredLogs,
+        [filteredLogs, showOnlyLatest5]
+    )
 
     return (
         <div className="space-y-6">
-            {/* Header / Título y acciones */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+
+            {/* Encabezado */}
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight text-primary">
                         Datos y Gestión de Bitácora
                     </h1>
 
-                    <p className="text-sm text-secondary mt-1">
-                        Consulta y ajusta tus datos actuales, imprime informes y gestiona importaciones/exportaciones.
+                    <p className="mt-1 text-sm text-secondary">
+                        Consulta tus registros, revisa las horas de práctica
+                        e importa o exporta información.
                     </p>
                 </div>
 
-                <div className="flex flex-col items-start sm:items-end gap-3 no-print shrink-0">
+                <div className="flex flex-wrap gap-2 no-print">
                     <button
                         type="button"
-                        onClick={() => setShowTrash((current) => !current)}
-                        className="btn-ghost flex items-center gap-2 border border-[var(--border-soft)]"
+                        onClick={() => setShowTrash(prev => !prev)}
+                        className="btn-ghost border border-[var(--border-soft)]"
                     >
-                        <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <path d="M3 6h18" />
-                            <path d="M8 6V4h8v2" />
-                            <path d="m19 6-1 14H6L5 6" />
-                            <path d="M10 11v5M14 11v5" />
-                        </svg>
-
                         {showTrash ? 'Ocultar papelera' : 'Papelera'}
                     </button>
 
                     <button
                         type="button"
-                        onClick={handlePrintSummary}
+                        onClick={() => window.print()}
                         disabled={logs.length === 0}
-                        className="btn-primary flex items-center gap-2 text-xs py-2 px-3 shadow-sm hover:shadow transition"
-                        title="Imprimir resumen métrico y registros"
+                        className="btn-primary"
                     >
-                        <svg
-                            width="15"
-                            height="15"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <polyline points="6 9 6 2 18 2 18 9" />
-                            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                            <rect x="6" y="14" width="12" height="8" />
-                        </svg>
-
-                        <span>Imprimir resumen</span>
+                        Imprimir resumen
                     </button>
                 </div>
             </div>
 
-            {/* Papelera de tareas */}
+            {/* Papelera */}
             {showTrash && (
                 <TaskTrash activePracticeId={activePracticeId} />
             )}
 
-            {/* Encabezado visible únicamente al imprimir el informe */}
+            {/* Encabezado de impresión */}
             <div className="hidden print-only mb-6 border-b border-gray-300 pb-4">
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-start gap-4">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">
                             Informe de Práctica Profesional
                         </h1>
 
-                        <p className="text-sm text-gray-600 mt-1">
-                            {profile?.full_name || 'Estudiante'} · {profile?.career || 'Carrera'} ({profile?.institution || 'Institución'})
+                        <p className="mt-1 text-sm text-gray-600">
+                            {profile?.full_name || 'Estudiante'}
+                            {' · '}
+                            {profile?.career || 'Carrera'}
+                            {' · '}
+                            {profile?.institution || 'Institución'}
                         </p>
 
                         {profile?.company && (
                             <p className="text-xs text-gray-500">
-                                Empresa: {profile.company} {profile.supervisor ? `· Supervisor: ${profile.supervisor}` : ''}
+                                Empresa: {profile.company}
+                                {profile.supervisor
+                                    ? ` · Supervisor: ${profile.supervisor}`
+                                    : ''}
                             </p>
                         )}
                     </div>
@@ -378,94 +423,75 @@ export default function Data({ activePracticeId }: DataProps) {
                 </div>
             </div>
 
-            {/* Resumen Métrico */}
-            <div className="card space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--border-soft)] pb-3">
+            {/* Resumen métrico */}
+            <section className="card space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-soft)] pb-3">
                     <div>
                         <h2 className="text-base font-semibold text-primary">
                             Resumen Métrico General
                         </h2>
-
-                        <p className="text-xs text-muted">
-                            Total acumulado y estado de avance de tu práctica.
+                        <p className="mt-1 text-xs text-muted">
+                            Total acumulado y avance de tu práctica.
                         </p>
                     </div>
 
-                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 w-fit">
+                    <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-900/30 dark:text-brand-300">
                         {metrics.percentage}% completado
                     </span>
                 </div>
 
-                {/* Tarjetas de indicadores */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="p-3.5 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-soft)]">
-                        <span className="text-xs text-muted font-medium">
-                            Horas Registradas
-                        </span>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
 
-                        <p className="text-xl font-bold text-primary mt-0.5">
-                            {metrics.totalHours}{' '}
-                            <span className="text-xs font-normal text-muted">
+                    <div className="rounded-xl border border-[var(--border-soft)] bg-[var(--bg-subtle)] p-3.5">
+                        <p className="text-xs text-muted">
+                            Horas Registradas
+                        </p>
+                        <p className="mt-1 text-xl font-bold text-primary">
+                            {metrics.totalHours}
+                            <span className="ml-1 text-xs font-normal text-muted">
                                 / {metrics.requiredHours}h
                             </span>
                         </p>
-
-                        <p className="text-[11px] text-muted mt-1">
+                        <p className="mt-1 text-[11px] text-muted">
                             {metrics.remainingHours}h restantes
                         </p>
                     </div>
 
-                    <div className="p-3.5 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-soft)]">
-                        <span className="text-xs text-muted font-medium">
+                    <div className="rounded-xl border border-[var(--border-soft)] bg-[var(--bg-subtle)] p-3.5">
+                        <p className="text-xs text-muted">
                             Modalidad
-                        </span>
-
-                        <div className="mt-1 flex items-baseline gap-2">
-                            <span className="text-sm font-semibold text-primary">
-                                {metrics.inPersonHours}h
-                            </span>
-                            <span className="text-[11px] text-muted">
-                                🏢 Presencial
-                            </span>
-                        </div>
-
-                        <div className="flex items-baseline gap-2 mt-0.5">
-                            <span className="text-sm font-semibold text-primary">
-                                {metrics.remoteHours}h
-                            </span>
-                            <span className="text-[11px] text-muted">
-                                🏠 Remoto
-                            </span>
-                        </div>
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-primary">
+                            🏢 {metrics.inPersonHours}h presencial
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-primary">
+                            🏠 {metrics.remoteHours}h remoto
+                        </p>
                     </div>
 
-                    <div className="p-3.5 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-soft)]">
-                        <span className="text-xs text-muted font-medium">
+                    <div className="rounded-xl border border-[var(--border-soft)] bg-[var(--bg-subtle)] p-3.5">
+                        <p className="text-xs text-muted">
                             Actividades
-                        </span>
-
-                        <p className="text-xl font-bold text-primary mt-0.5">
+                        </p>
+                        <p className="mt-1 text-xl font-bold text-primary">
                             {metrics.totalEntries}
                         </p>
-
-                        <p className="text-[11px] text-muted mt-1">
+                        <p className="mt-1 text-[11px] text-muted">
                             en {metrics.uniqueDays} días registrados
                         </p>
                     </div>
 
-                    <div className="p-3.5 rounded-xl bg-[var(--bg-subtle)] border border-[var(--border-soft)]">
-                        <span className="text-xs text-muted font-medium">
+                    <div className="rounded-xl border border-[var(--border-soft)] bg-[var(--bg-subtle)] p-3.5">
+                        <p className="text-xs text-muted">
                             Promedio Diario
-                        </span>
-
-                        <p className="text-xl font-bold text-primary mt-0.5">
-                            {metrics.avgPerDay}{' '}
-                            <span className="text-xs font-normal text-muted">
+                        </p>
+                        <p className="mt-1 text-xl font-bold text-primary">
+                            {metrics.avgPerDay}
+                            <span className="ml-1 text-xs font-normal text-muted">
                                 h/día
                             </span>
                         </p>
-
-                        <p className="text-[11px] text-muted mt-1">
+                        <p className="mt-1 text-[11px] text-muted">
                             Días con actividad
                         </p>
                     </div>
@@ -473,248 +499,238 @@ export default function Data({ activePracticeId }: DataProps) {
 
                 {/* Barra de progreso */}
                 <div>
-                    <div className="flex justify-between text-xs text-muted mb-1.5 font-medium">
+                    <div className="mb-2 flex justify-between gap-2 text-xs text-muted">
                         <span>
-                            Progreso hacia las {metrics.requiredHours} horas requeridas
+                            Progreso hacia las {metrics.requiredHours} horas
                         </span>
-
-                        <span className="text-brand-600 dark:text-brand-400 font-semibold">
+                        <span className="font-semibold text-brand-600">
                             {metrics.percentage}%
                         </span>
                     </div>
 
                     <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--bg-subtle)]">
                         <div
-                            className="h-2.5 rounded-full transition-all duration-500"
+                            className="h-full rounded-full transition-all duration-500"
                             style={{
-                                width: `${Math.min(100, Number(metrics.percentage))}%`,
-                                background: 'linear-gradient(90deg, var(--color-brand-600), var(--color-brand-400))',
+                                width: `${Math.min(
+                                    100,
+                                    Number(metrics.percentage)
+                                )}%`,
+                                background:
+                                    'linear-gradient(90deg, var(--color-brand-600), var(--color-brand-400))',
                             }}
                         />
                     </div>
                 </div>
 
-                {/* Desglose por categorías */}
+                {/* Categorías */}
                 {Object.keys(metrics.byCategory).length > 0 && (
-                    <div className="pt-2 border-t border-[var(--border-soft)]">
-                        <h3 className="text-xs font-semibold text-secondary mb-2 uppercase tracking-wide">
+                    <div className="border-t border-[var(--border-soft)] pt-3">
+                        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-secondary">
                             Horas por categoría
                         </h3>
 
                         <div className="flex flex-wrap gap-2">
-                            {Object.entries(metrics.byCategory).map(([cat, hours]) => {
-                                const pct = metrics.totalHours > 0
-                                    ? ((hours / metrics.totalHours) * 100).toFixed(0)
-                                    : '0'
+                            {Object.entries(metrics.byCategory).map(
+                                ([category, hours]) => {
+                                    const percentage = metrics.totalHours > 0
+                                        ? (
+                                            (hours / metrics.totalHours) * 100
+                                        ).toFixed(0)
+                                        : '0'
 
-                                return (
-                                    <div
-                                        key={cat}
-                                        className="text-xs px-3 py-1.5 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border-soft)] flex items-center gap-2"
-                                    >
-                                        <span className="font-medium text-primary">
-                                            {cat}:
-                                        </span>
-
-                                        <span className="text-brand-600 dark:text-brand-400 font-semibold">
-                                            {hours}h
-                                        </span>
-
-                                        <span className="text-[10px] text-muted">
-                                            ({pct}%)
-                                        </span>
-                                    </div>
-                                )
-                            })}
+                                    return (
+                                        <div
+                                            key={category}
+                                            className="flex items-center gap-2 rounded-lg border border-[var(--border-soft)] bg-[var(--bg-subtle)] px-3 py-2 text-xs"
+                                        >
+                                            <span className="font-medium text-primary">
+                                                {category}:
+                                            </span>
+                                            <span className="font-semibold text-brand-600">
+                                                {hours}h
+                                            </span>
+                                            <span className="text-muted">
+                                                ({percentage}%)
+                                            </span>
+                                        </div>
+                                    )
+                                }
+                            )}
                         </div>
                     </div>
                 )}
-            </div>
+            </section>
 
-            {/* Explorador de Datos Actuales */}
-            <div className="card space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--border-soft)] pb-3">
-                    <div>
-                        <div className="flex items-center gap-2">
+            {/* Explorador de bitácora */}
+            <section className="card space-y-4">
+                <div className="flex flex-col gap-3 border-b border-[var(--border-soft)] pb-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
                             <h2 className="text-base font-semibold text-primary">
-                                {showOnlyLatest5 ? 'Últimas 5 Actividades' : 'Registros Actuales'}
+                                {showOnlyLatest5
+                                    ? 'Últimas 5 Actividades'
+                                    : 'Registros Actuales'}
                             </h2>
 
-                            <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300">
-                                Mostrando {displayedLogs.length} de {filteredLogs.length}
-                            </span>
+                            <p className="mt-1 text-xs text-muted">
+                                Mostrando {displayedLogs.length} de{' '}
+                                {filteredLogs.length} registros
+                            </p>
                         </div>
 
-                        <p className="text-xs text-muted mt-0.5">
-                            {showOnlyLatest5
-                                ? 'Visualizando las 5 actividades más recientes de tu bitácora.'
-                                : `${filteredLogs.length} actividades encontradas con los filtros aplicados.`}
-                        </p>
-                    </div>
-
-                    {/* Filtros */}
-                    <div className="flex flex-wrap items-center gap-2 no-print">
                         <button
                             type="button"
-                            onClick={() => setShowOnlyLatest5(!showOnlyLatest5)}
-                            className={`text-xs py-1.5 px-3 rounded-lg font-medium transition border ${showOnlyLatest5
-                                ? 'bg-brand-600 text-white border-brand-600 hover:bg-brand-700'
-                                : 'bg-[var(--bg-subtle)] text-primary border-[var(--border-soft)] hover:bg-[var(--bg-hover)]'
-                                }`}
+                            onClick={() => setShowOnlyLatest5(prev => !prev)}
+                            className="btn-ghost border border-[var(--border-soft)] text-xs"
                         >
                             {showOnlyLatest5
                                 ? 'Ver todos los registros'
-                                : 'Mostrar solo últimas 5'}
+                                : 'Mostrar últimas 5'}
                         </button>
+                    </div>
 
+                    {/* Filtros */}
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 no-print">
                         <input
-                            type="text"
+                            type="search"
                             placeholder="Buscar actividad..."
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="input-base text-xs py-1.5 px-2.5 w-36 sm:w-44"
+                            onChange={e => setSearchQuery(e.target.value)}
+                            className="input-base w-full text-xs"
                         />
 
                         <select
                             value={selectedCategory}
-                            onChange={(e) => setSelectedCategory(e.target.value)}
-                            className="input-base text-xs py-1.5 px-2"
+                            onChange={e => setSelectedCategory(e.target.value)}
+                            className="input-base w-full text-xs"
                         >
-                            {CATEGORIES.map((cat) => (
-                                <option key={cat} value={cat}>
-                                    {cat}
+                            {CATEGORIES.map(category => (
+                                <option key={category} value={category}>
+                                    {category}
                                 </option>
                             ))}
                         </select>
 
                         <select
                             value={selectedModality}
-                            onChange={(e) => setSelectedModality(e.target.value as any)}
-                            className="input-base text-xs py-1.5 px-2"
+                            onChange={e =>
+                                setSelectedModality(
+                                    e.target.value as ModalityFilter
+                                )
+                            }
+                            className="input-base w-full text-xs"
                         >
-                            <option value="all">Todas las mod.</option>
+                            <option value="all">Todas las modalidades</option>
                             <option value="in_person">Presencial</option>
                             <option value="remote">Remoto</option>
                         </select>
 
                         <button
-                            onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
-                            className="btn-ghost border border-[var(--border-soft)] text-xs py-1.5 px-2.5 text-secondary"
-                            title="Cambiar orden de fecha"
+                            type="button"
+                            onClick={() =>
+                                setSortOrder(prev =>
+                                    prev === 'desc' ? 'asc' : 'desc'
+                                )
+                            }
+                            className="btn-ghost border border-[var(--border-soft)] text-xs"
                         >
-                            {sortOrder === 'desc' ? 'Recientes ↓' : 'Antiguos ↑'}
+                            {sortOrder === 'desc'
+                                ? 'Recientes ↓'
+                                : 'Antiguos ↑'}
                         </button>
                     </div>
                 </div>
 
-                {/* Tabla de registros */}
+                {loadError && (
+                    <p
+                        role="alert"
+                        className="rounded-lg border border-red-500/30 p-3 text-sm text-red-500"
+                    >
+                        Error al cargar registros: {loadError}
+                    </p>
+                )}
+
                 {loadingLogs ? (
-                    <div className="py-8 text-center text-xs text-muted">
+                    <p className="py-8 text-center text-sm text-muted">
                         Cargando registros...
-                    </div>
+                    </p>
                 ) : displayedLogs.length === 0 ? (
                     <div className="py-8 text-center">
                         <p className="text-sm text-muted">
-                            No se encontraron registros con los filtros aplicados.
+                            No se encontraron registros.
                         </p>
-
-                        {logs.length === 0 && (
-                            <p className="text-xs text-muted mt-1">
-                                Usa el botón flotante (+) o importa un archivo abajo para comenzar.
-                            </p>
-                        )}
+                        <p className="mt-1 text-xs text-muted">
+                            Puedes registrar horas o revisar tus filtros.
+                        </p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto border border-[var(--border-soft)] rounded-lg">
-                        <table className="w-full text-xs text-left">
-                            <thead className="bg-[var(--bg-subtle)] text-secondary border-b border-[var(--border-soft)]">
+                    <div className="overflow-x-auto rounded-lg border border-[var(--border-soft)]">
+                        <table className="w-full text-left text-xs">
+                            <thead className="border-b border-[var(--border-soft)] bg-[var(--bg-subtle)] text-secondary">
                                 <tr>
-                                    <th className="py-2.5 px-3 font-medium">Fecha</th>
-                                    <th className="py-2.5 px-3 font-medium">Descripción</th>
-                                    <th className="py-2.5 px-3 font-medium">Categoría</th>
-                                    <th className="py-2.5 px-3 font-medium">Modalidad</th>
-                                    <th className="py-2.5 px-3 font-medium text-right">Horas</th>
-                                    <th className="py-2.5 px-3 font-medium text-right no-print">Acciones</th>
+                                    <th className="px-3 py-3 font-medium">Fecha</th>
+                                    <th className="px-3 py-3 font-medium">Descripción</th>
+                                    <th className="px-3 py-3 font-medium">Categoría</th>
+                                    <th className="px-3 py-3 font-medium">Modalidad</th>
+                                    <th className="px-3 py-3 text-right font-medium">Horas</th>
+                                    <th className="px-3 py-3 text-right font-medium no-print">Acciones</th>
                                 </tr>
                             </thead>
 
                             <tbody className="divide-y divide-[var(--border-soft)]">
-                                {displayedLogs.map((log) => (
+                                {displayedLogs.map(log => (
                                     <tr
                                         key={log.id}
-                                        className="hover:bg-[var(--bg-hover)] transition-colors"
+                                        className="transition-colors hover:bg-[var(--bg-hover)]"
                                     >
-                                        <td className="py-2.5 px-3 whitespace-nowrap font-medium text-primary">
+                                        <td className="whitespace-nowrap px-3 py-3 font-medium text-primary">
                                             {log.date}
                                         </td>
 
-                                        <td className="py-2.5 px-3 text-primary max-w-xs break-words">
+                                        <td className="max-w-xs break-words px-3 py-3 text-primary">
                                             {log.task_description}
                                         </td>
 
-                                        <td className="py-2.5 px-3 whitespace-nowrap">
-                                            <span className="px-2 py-0.5 rounded bg-[var(--bg-subtle)] border border-[var(--border-soft)] text-[11px] text-secondary">
+                                        <td className="px-3 py-3">
+                                            <span className="rounded border border-[var(--border-soft)] bg-[var(--bg-subtle)] px-2 py-1 text-secondary">
                                                 {log.category || 'Otro'}
                                             </span>
                                         </td>
 
-                                        <td className="py-2.5 px-3 whitespace-nowrap text-secondary">
-                                            {log.is_in_person ? (
-                                                <span className="inline-flex items-center gap-1">
-                                                    🏢 Presencial
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex items-center gap-1">
-                                                    🏠 Remoto
-                                                </span>
-                                            )}
+                                        <td className="whitespace-nowrap px-3 py-3 text-secondary">
+                                            {log.is_in_person
+                                                ? '🏢 Presencial'
+                                                : '🏠 Remoto'}
                                         </td>
 
-                                        <td className="py-2.5 px-3 whitespace-nowrap text-right font-semibold text-primary">
+                                        <td className="whitespace-nowrap px-3 py-3 text-right font-semibold text-primary">
                                             {log.hours_worked} h
                                         </td>
 
-                                        <td className="py-2.5 px-3 whitespace-nowrap text-right no-print">
-                                            <div className="inline-flex items-center gap-1">
+                                        <td className="whitespace-nowrap px-3 py-3 text-right no-print">
+                                            <div className="inline-flex gap-2">
                                                 <button
+                                                    type="button"
                                                     onClick={() => setEditingLog(log)}
-                                                    className="p-1 rounded hover:bg-[var(--bg-subtle)] text-secondary hover:text-primary transition"
+                                                    className="rounded-lg border border-[var(--border-soft)] px-2 py-1 text-secondary hover:bg-[var(--bg-subtle)]"
                                                     title="Modificar registro"
                                                 >
-                                                    <svg
-                                                        width="14"
-                                                        height="14"
-                                                        viewBox="0 0 24 24"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        strokeWidth="2"
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                    >
-                                                        <path d="M12 20h9" />
-                                                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                                                    </svg>
+                                                    Editar
                                                 </button>
 
                                                 <button
-                                                    onClick={() => handleDeleteLog(log.id)}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        void handleDeleteLog(log.id)
+                                                    }
                                                     disabled={deletingId === log.id}
-                                                    className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/30 text-red-500 hover:text-red-700 transition disabled:opacity-50"
+                                                    className="rounded-lg border border-red-500/30 px-2 py-1 text-red-500 hover:bg-red-500/10 disabled:opacity-50"
                                                     title="Eliminar registro"
                                                 >
-                                                    <svg
-                                                        width="14"
-                                                        height="14"
-                                                        viewBox="0 0 24 24"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        strokeWidth="2"
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                    >
-                                                        <polyline points="3 6 5 6 21 6" />
-                                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                                                    </svg>
+                                                    {deletingId === log.id
+                                                        ? 'Eliminando...'
+                                                        : 'Eliminar'}
                                                 </button>
                                             </div>
                                         </td>
@@ -724,157 +740,161 @@ export default function Data({ activePracticeId }: DataProps) {
                         </table>
                     </div>
                 )}
-            </div>
+            </section>
 
             {/* Modal de edición */}
             {editingLog && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in no-print">
-                    <div className="card w-full max-w-md p-5 bg-[var(--bg-card)] border border-[var(--border-soft)] rounded-xl shadow-2xl space-y-4">
-                        <div className="flex items-center justify-between border-b border-[var(--border-soft)] pb-2">
-                            <h3 className="text-sm font-semibold text-primary">
-                                Modificar Registro
-                            </h3>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 no-print">
+                    <div className="w-full max-w-md space-y-4 rounded-xl border border-[var(--border-soft)] bg-[var(--bg-card)] p-5 shadow-2xl">
+                        <div className="flex items-center justify-between border-b border-[var(--border-soft)] pb-3">
+                            <h2 className="font-semibold text-primary">
+                                Modificar registro
+                            </h2>
 
                             <button
+                                type="button"
                                 onClick={() => setEditingLog(null)}
-                                className="text-muted hover:text-primary text-base font-bold leading-none px-1"
+                                className="btn-ghost"
+                                aria-label="Cerrar"
                             >
                                 ×
                             </button>
                         </div>
 
-                        <form onSubmit={handleSaveEdit} className="space-y-3">
+                        <form
+                            onSubmit={handleSaveEdit}
+                            className="space-y-4"
+                        >
                             <div>
-                                <label className="block text-xs font-medium text-secondary mb-1">
+                                <label className="mb-1 block text-xs font-medium text-secondary">
                                     Descripción
                                 </label>
 
                                 <textarea
+                                    required
                                     value={editingLog.task_description}
-                                    onChange={(e) =>
+                                    onChange={e =>
                                         setEditingLog({
                                             ...editingLog,
                                             task_description: e.target.value,
                                         })
                                     }
-                                    className="input-base w-full h-20 text-xs py-2"
-                                    required
+                                    className="input-base h-24 w-full text-sm"
                                 />
                             </div>
 
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-xs font-medium text-secondary mb-1">
+                                    <label className="mb-1 block text-xs font-medium text-secondary">
                                         Fecha
                                     </label>
 
                                     <input
+                                        required
                                         type="date"
                                         value={editingLog.date}
-                                        onChange={(e) =>
+                                        onChange={e =>
                                             setEditingLog({
                                                 ...editingLog,
                                                 date: e.target.value,
                                             })
                                         }
-                                        className="input-base w-full text-xs"
-                                        required
+                                        className="input-base w-full text-sm"
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-medium text-secondary mb-1">
+                                    <label className="mb-1 block text-xs font-medium text-secondary">
                                         Horas
                                     </label>
 
                                     <input
+                                        required
                                         type="number"
-                                        step="0.25"
                                         min="0.25"
                                         max="24"
+                                        step="0.25"
                                         value={editingLog.hours_worked}
-                                        onChange={(e) =>
+                                        onChange={e =>
                                             setEditingLog({
                                                 ...editingLog,
                                                 hours_worked: Number(e.target.value),
                                             })
                                         }
-                                        className="input-base w-full text-xs"
-                                        required
+                                        className="input-base w-full text-sm"
                                     />
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-xs font-medium text-secondary mb-1">
+                                    <label className="mb-1 block text-xs font-medium text-secondary">
                                         Categoría
                                     </label>
 
                                     <select
                                         value={editingLog.category}
-                                        onChange={(e) =>
+                                        onChange={e =>
                                             setEditingLog({
                                                 ...editingLog,
                                                 category: e.target.value,
                                             })
                                         }
-                                        className="input-base w-full text-xs"
+                                        className="input-base w-full text-sm"
                                     >
-                                        {CATEGORIES.filter((c) => c !== 'Todas').map((c) => (
-                                            <option key={c} value={c}>
-                                                {c}
+                                        {[
+                                            ...new Set([
+                                                ...CATEGORIES.filter(
+                                                    category => category !== 'Todas'
+                                                ),
+                                                editingLog.category,
+                                            ]),
+                                        ].map(category => (
+                                            <option
+                                                key={category}
+                                                value={category}
+                                            >
+                                                {category}
                                             </option>
                                         ))}
                                     </select>
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-medium text-secondary mb-1">
+                                    <label className="mb-1 block text-xs font-medium text-secondary">
                                         Modalidad
                                     </label>
 
-                                    <div className="flex gap-1">
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                setEditingLog({
-                                                    ...editingLog,
-                                                    is_in_person: true,
-                                                })
-                                            }
-                                            className={`flex-1 py-1.5 text-xs rounded font-medium border transition ${editingLog.is_in_person
-                                                ? 'bg-brand-600 text-white border-brand-600'
-                                                : 'bg-[var(--bg-subtle)] text-secondary border-[var(--border-soft)] hover:bg-[var(--bg-hover)]'
-                                                }`}
-                                        >
+                                    <select
+                                        value={
+                                            editingLog.is_in_person
+                                                ? 'presencial'
+                                                : 'remoto'
+                                        }
+                                        onChange={e =>
+                                            setEditingLog({
+                                                ...editingLog,
+                                                is_in_person:
+                                                    e.target.value === 'presencial',
+                                            })
+                                        }
+                                        className="input-base w-full text-sm"
+                                    >
+                                        <option value="presencial">
                                             Presencial
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                setEditingLog({
-                                                    ...editingLog,
-                                                    is_in_person: false,
-                                                })
-                                            }
-                                            className={`flex-1 py-1.5 text-xs rounded font-medium border transition ${!editingLog.is_in_person
-                                                ? 'bg-brand-600 text-white border-brand-600'
-                                                : 'bg-[var(--bg-subtle)] text-secondary border-[var(--border-soft)] hover:bg-[var(--bg-hover)]'
-                                                }`}
-                                        >
+                                        </option>
+                                        <option value="remoto">
                                             Remoto
-                                        </button>
-                                    </div>
+                                        </option>
+                                    </select>
                                 </div>
                             </div>
 
-                            <div className="flex justify-end gap-2 pt-2 border-t border-[var(--border-soft)]">
+                            <div className="flex justify-end gap-2 border-t border-[var(--border-soft)] pt-3">
                                 <button
                                     type="button"
                                     onClick={() => setEditingLog(null)}
-                                    className="btn-ghost text-xs py-1.5 px-3"
+                                    className="btn-ghost"
                                 >
                                     Cancelar
                                 </button>
@@ -882,9 +902,11 @@ export default function Data({ activePracticeId }: DataProps) {
                                 <button
                                     type="submit"
                                     disabled={savingEdit}
-                                    className="btn-primary text-xs py-1.5 px-3"
+                                    className="btn-primary"
                                 >
-                                    {savingEdit ? 'Guardando...' : 'Guardar Cambios'}
+                                    {savingEdit
+                                        ? 'Guardando...'
+                                        : 'Guardar cambios'}
                                 </button>
                             </div>
                         </form>
@@ -892,231 +914,75 @@ export default function Data({ activePracticeId }: DataProps) {
                 </div>
             )}
 
-            {/* Acciones de Importación y Exportación */}
-            <div className="grid md:grid-cols-2 gap-4 no-print">
-                {/* Importar */}
-                <div className="card">
-                    <h2 className="font-semibold text-sm mb-1 text-primary">
-                        Importar registros
-                    </h2>
+            {/* Nuevo importador multisección */}
+            <div className="no-print">
+                <DataImporter />
+            </div>
 
-                    <p className="text-xs text-muted mb-4">
-                        Acepta archivos .csv y .xlsx con columnas: fecha, horas, descripcion, categoria, presencial.
-                    </p>
-
-                    <div
-                        onDrop={onDrop}
-                        onDragOver={(e) => e.preventDefault()}
-                        onClick={() => fileInput.current?.click()}
-                        className="border-2 border-dashed border-brand-200 dark:border-brand-800 bg-brand-50/30 dark:bg-brand-900/10 rounded-xl p-8 text-center cursor-pointer hover:border-brand-400 hover:bg-brand-50/60 dark:hover:bg-brand-900/20 transition-colors"
-                    >
-                        <div className="w-10 h-10 rounded-full bg-brand-600 text-[var(--color-brand-contrast)] flex items-center justify-center mx-auto mb-3">
-                            <svg
-                                width="18"
-                                height="18"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            >
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                <polyline points="17 8 12 3 7 8" />
-                                <line x1="12" y1="3" x2="12" y2="15" />
-                            </svg>
-                        </div>
-
-                        <p className="text-sm font-medium text-primary">
-                            {fileName || 'Arrastra tu archivo aquí'}
-                        </p>
-
-                        <p className="text-xs text-muted mt-1">
-                            o haz clic para seleccionar
-                        </p>
-
-                        <input
-                            ref={fileInput}
-                            type="file"
-                            accept=".csv,.xlsx,.xls"
-                            className="hidden"
-                            onChange={(e) =>
-                                e.target.files?.[0] && handleFile(e.target.files[0])
-                            }
-                        />
-                    </div>
-
-                    {error && (
-                        <p className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900 rounded-lg px-3 py-2 mt-3">
-                            {error}
-                        </p>
-                    )}
-
-                    {success && (
-                        <p className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900 rounded-lg px-3 py-2 mt-3">
-                            {success}
-                        </p>
-                    )}
-
-                    {preview && (
-                        <div className="mt-4 animate-fade-in">
-                            <p className="text-xs font-medium text-secondary mb-2">
-                                Vista previa ({preview.length} filas)
-                            </p>
-
-                            <div className="border border-[var(--border-soft)] rounded-lg overflow-hidden max-h-48 overflow-y-auto">
-                                <table className="w-full text-xs">
-                                    <thead className="bg-[var(--bg-subtle)] text-secondary">
-                                        <tr>
-                                            <th className="text-left px-2 py-1.5 font-medium">
-                                                Fecha
-                                            </th>
-                                            <th className="text-left px-2 py-1.5 font-medium">
-                                                Horas
-                                            </th>
-                                            <th className="text-left px-2 py-1.5 font-medium">
-                                                Descripción
-                                            </th>
-                                        </tr>
-                                    </thead>
-
-                                    <tbody>
-                                        {preview.map((r, i) => (
-                                            <tr
-                                                key={i}
-                                                className="border-t border-[var(--border-soft)]"
-                                            >
-                                                <td className="px-2 py-1.5 text-primary">
-                                                    {r.date}
-                                                </td>
-                                                <td className="px-2 py-1.5 text-primary">
-                                                    {r.hours_worked}
-                                                </td>
-                                                <td className="px-2 py-1.5 truncate max-w-[140px] text-primary">
-                                                    {r.task_description}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <button
-                                onClick={confirmImport}
-                                disabled={importing}
-                                className="btn-primary w-full mt-3"
-                            >
-                                {importing ? 'Importando...' : 'Confirmar importación'}
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-                {/* Exportar */}
-                <div className="card">
-                    <h2 className="font-semibold text-sm mb-1 text-primary">
+            {/* Exportaciones existentes */}
+            <section className="card space-y-4 no-print">
+                <div>
+                    <h2 className="text-base font-semibold text-primary">
                         Exportar archivos
                     </h2>
 
-                    <p className="text-xs text-muted mb-4">
-                        Descarga tu bitácora en formato de archivo para respaldo o entrega.
+                    <p className="mt-1 text-sm text-secondary">
+                        Descarga tu bitácora para respaldo o entrega.
                     </p>
-
-                    <div className="space-y-3">
-                        <button
-                            onClick={() => profile && exportExcel(profile, logs)}
-                            disabled={!profile || logs.length === 0}
-                            className="w-full flex items-center gap-3 p-4 border border-[var(--border-soft)] rounded-xl hover:border-emerald-400 hover:bg-emerald-50/10 dark:hover:bg-emerald-900/10 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <div className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                                <svg
-                                    width="18"
-                                    height="18"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                >
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                    <polyline points="14 2 14 8 20 8" />
-                                </svg>
-                            </div>
-
-                            <div>
-                                <p className="text-sm font-medium text-primary">
-                                    Excel (.xlsx)
-                                </p>
-                                <p className="text-xs text-muted">
-                                    Ideal para análisis y cálculos
-                                </p>
-                            </div>
-                        </button>
-
-                        <button
-                            onClick={() => profile && exportPdf(profile, logs)}
-                            disabled={!profile || logs.length === 0}
-                            className="w-full flex items-center gap-3 p-4 border-2 border-brand-200 dark:border-brand-800 bg-brand-50/50 dark:bg-brand-900/20 rounded-xl hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/30 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <div className="w-10 h-10 rounded-lg bg-brand-600 text-[var(--color-brand-contrast)] flex items-center justify-center shrink-0">
-                                <svg
-                                    width="18"
-                                    height="18"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                >
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                    <polyline points="14 2 14 8 20 8" />
-                                    <line x1="16" y1="13" x2="8" y2="13" />
-                                    <line x1="16" y1="17" x2="8" y2="17" />
-                                </svg>
-                            </div>
-
-                            <div>
-                                <p className="text-sm font-medium text-brand-700 dark:text-brand-300">
-                                    Documento PDF
-                                </p>
-                                <p className="text-xs text-brand-600/70 dark:text-brand-400/70">
-                                    Archivo PDF generado directamente
-                                </p>
-                            </div>
-                        </button>
-                    </div>
-
-                    {logs.length === 0 && (
-                        <p className="text-xs text-muted mt-4 text-center">
-                            Registra horas primero para poder exportar.
-                        </p>
-                    )}
                 </div>
-            </div>
 
-            {/* Plantilla */}
-            <div className="rounded-xl border border-brand-200 dark:border-brand-800 bg-brand-50/40 dark:bg-brand-900/20 p-5 no-print">
-                <div className="flex items-center justify-between gap-4">
-                    <div>
-                        <h2 className="font-semibold text-sm text-brand-700 dark:text-brand-300">
-                            Plantilla de importación
-                        </h2>
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <button
+                        type="button"
+                        onClick={() =>
+                            profile && exportExcel(profile, logs)
+                        }
+                        disabled={!profile || logs.length === 0}
+                        className="flex items-center gap-3 rounded-xl border border-[var(--border-soft)] p-4 text-left transition-colors hover:bg-[var(--bg-subtle)] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600">
+                            XLS
+                        </span>
 
-                        <p className="text-xs text-brand-600/70 dark:text-brand-400/70 mt-0.5">
-                            Descarga el formato correcto para evitar errores al importar.
-                        </p>
-                    </div>
+                        <span>
+                            <span className="block text-sm font-semibold text-primary">
+                                Excel (.xlsx)
+                            </span>
+                            <span className="mt-1 block text-xs text-muted">
+                                Ideal para análisis y cálculos
+                            </span>
+                        </span>
+                    </button>
 
                     <button
-                        onClick={downloadTemplate}
-                        className="btn-ghost border border-brand-300 dark:border-brand-700 text-brand-700 dark:text-brand-300 shrink-0 hover:bg-brand-100 dark:hover:bg-brand-900/40"
+                        type="button"
+                        onClick={() =>
+                            profile && exportPdf(profile, logs)
+                        }
+                        disabled={!profile || logs.length === 0}
+                        className="flex items-center gap-3 rounded-xl border border-[var(--border-soft)] p-4 text-left transition-colors hover:bg-[var(--bg-subtle)] disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                        Descargar plantilla
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-xs font-bold text-white">
+                            PDF
+                        </span>
+
+                        <span>
+                            <span className="block text-sm font-semibold text-primary">
+                                Documento PDF
+                            </span>
+                            <span className="mt-1 block text-xs text-muted">
+                                Informe listo para entregar
+                            </span>
+                        </span>
                     </button>
                 </div>
-            </div>
+
+                {logs.length === 0 && (
+                    <p className="text-center text-xs text-muted">
+                        Registra horas primero para habilitar las exportaciones.
+                    </p>
+                )}
+            </section>
         </div>
     )
 }

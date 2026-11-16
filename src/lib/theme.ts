@@ -1,4 +1,10 @@
+import { supabase } from './supabase'
+
 export type ThemeMode = 'light' | 'dark' | 'system'
+
+/** Tema por defecto de la aplicación (páginas públicas y usuarios sin tema guardado). */
+export const DEFAULT_THEME_MODE: ThemeMode = 'light'
+export const DEFAULT_THEME_COLOR = 'orange'
 
 export type FontFamily = 'inter' | 'sitka' | 'monospace' | 'system'
 export type FontSize = 'small' | 'medium' | 'large'
@@ -114,10 +120,10 @@ export function applyContentWidth(width: ContentWidth) {
 }
 
 export function getStoredMode(): ThemeMode {
-    return (localStorage.getItem(STORAGE_KEYS.mode) as ThemeMode) || 'system'
+    return (localStorage.getItem(STORAGE_KEYS.mode) as ThemeMode) || DEFAULT_THEME_MODE
 }
 export function getStoredColor(): string {
-    return localStorage.getItem(STORAGE_KEYS.color) || 'indigo'
+    return localStorage.getItem(STORAGE_KEYS.color) || DEFAULT_THEME_COLOR
 }
 export function getStoredFont(): FontFamily {
     return (localStorage.getItem(STORAGE_KEYS.font) as FontFamily) || 'inter'
@@ -158,15 +164,55 @@ export function applyAllPreferences(prefs: {
     if (prefs.width) applyContentWidth(prefs.width)
 }
 
-/** Resetea todo a los valores neutros */
+/** Aplica el tema por defecto (naranja claro) sin tocar el resto de preferencias. */
+export function applyDefaultTheme() {
+    applyColorTheme(DEFAULT_THEME_COLOR)
+    applyThemeMode(DEFAULT_THEME_MODE)
+}
+
+/**
+ * Guarda el tema del usuario autenticado en `profiles.theme_mode` / `profiles.theme_color`.
+ * Si no hay sesión activa no hace nada.
+ */
+export async function persistThemeToProfile(prefs: {
+    mode?: ThemeMode
+    color?: string
+}) {
+    const patch: {
+        theme_mode?: ThemeMode
+        theme_color?: string
+    } = {}
+
+    if (prefs.mode) patch.theme_mode = prefs.mode
+    if (prefs.color) patch.theme_color = prefs.color
+
+    if (Object.keys(patch).length === 0) return
+
+    const { data, error } = await supabase.auth.getUser()
+
+    if (error || !data.user) return
+
+    const { error: updateError } = await supabase
+        .from('profiles')
+        .update(patch)
+        .eq('id', data.user.id)
+
+    if (updateError) {
+        console.error(
+            'No se pudo guardar el tema del usuario:',
+            updateError.message,
+        )
+    }
+}
+
+/** Resetea todo a los valores neutros (tema por defecto: naranja claro). */
 export function resetTheme() {
     localStorage.removeItem(STORAGE_KEYS.mode)
     localStorage.removeItem(STORAGE_KEYS.color)
     localStorage.removeItem(STORAGE_KEYS.font)
     localStorage.removeItem(STORAGE_KEYS.size)
     localStorage.removeItem(STORAGE_KEYS.width)
-    applyColorTheme('indigo')
-    applyThemeMode('system')
+    applyDefaultTheme()
     applyFont('inter')
     applyFontSize('medium')
     applyContentWidth('medium')

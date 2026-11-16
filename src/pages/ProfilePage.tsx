@@ -288,7 +288,7 @@ export default function ProfilePage() {
                     <div className="flex justify-between items-center gap-3 pt-2">
                         <span className="text-xs text-brand-500">{saved === 'profile' ? '✓ Guardado' : ''}</span>
                         <button type="button" onClick={() => void saveProfile()} disabled={savingProfile}
-                            className="bg-[var(--border-strong)] hover:bg-[#444] px-4 py-2 rounded text-sm transition-colors disabled:opacity-50">
+                            className="bg-[var(--border-strong)] hover:bg-[var(--bg-hover)] px-4 py-2 rounded text-sm transition-colors disabled:opacity-50">
                             {savingProfile ? 'Guardando…' : 'Guardar cuenta'}
                         </button>
                     </div>
@@ -473,7 +473,7 @@ export default function ProfilePage() {
                             <div className="flex flex-wrap justify-between items-center gap-3 pt-2">
                                 <span className="text-xs text-brand-500">{saved === 'practice' ? '✓ Guardado' : ''}</span>
                                 <button type="submit" disabled={savingPractice}
-                                    className="bg-[var(--border-strong)] hover:bg-[#444] px-4 py-2 rounded text-sm transition-colors disabled:opacity-50">
+                                    className="bg-[var(--border-strong)] hover:bg-[var(--bg-hover)] px-4 py-2 rounded text-sm transition-colors disabled:opacity-50">
                                     {savingPractice ? 'Guardando…' : 'Guardar práctica y pago'}
                                 </button>
                             </div>

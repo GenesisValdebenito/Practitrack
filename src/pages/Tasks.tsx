@@ -10,6 +10,8 @@ import type { TaskStatus } from '../lib/taskOperations'
 import TaskTrash from '../components/TaskTrash'
 import GanttChart from '../components/GanttChart'
 import UnifiedBacklog from '../components/UnifiedBacklog'
+import WeeklyPlanner from '../components/WeeklyPlanner'
+import WeeklyPlannerReport from '../components/WeeklyPlannerReport'
 
 type Task = {
   id: string
@@ -26,50 +28,40 @@ type Task = {
   deleted_at?: string | null
   purge_at?: string | null
 }
-
 type Tab =
   | 'resumen'
   | 'backlog'
   | 'trabajo'
   | 'gantt'
   | 'informes'
-
 type TasksProps = {
   activePracticeId?: string | null
 }
-
 const TABS: { id: Tab; label: string }[] = [
   { id: 'resumen', label: 'Resumen' },
   { id: 'backlog', label: 'Backlog' },
-  { id: 'trabajo', label: 'Trabajo actual' },
+  { id: 'trabajo', label: 'Planificador semanal' },
   { id: 'gantt', label: 'Carta Gantt' },
   { id: 'informes', label: 'Informes' },
 ]
-
 const STATUS_LABEL: Record<TaskStatus, string> = {
   todo: 'Por hacer',
   doing: 'En curso',
   done: 'Hecho',
 }
-
 const inputClass = 'input-base min-w-0'
 const cardClass =
   'rounded-xl border border-[var(--border-soft)] bg-[var(--bg-card)]'
-
 function formatDate(value: string | null) {
   if (!value) return 'Sin fecha'
-
   const date = new Date(`${value}T00:00:00`)
-
   if (Number.isNaN(date.getTime())) return value
-
   return date.toLocaleDateString('es-CL', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
   })
 }
-
 function isOverdue(task: Task) {
   return (
     !!task.due_date &&
@@ -77,7 +69,6 @@ function isOverdue(task: Task) {
     task.due_date < fmt(new Date())
   )
 }
-
 export default function Tasks({
   activePracticeId,
 }: TasksProps) {
@@ -86,17 +77,14 @@ export default function Tasks({
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] =
     useState<'all' | TaskStatus>('all')
-
   const [showForm, setShowForm] = useState(false)
   const [title, setTitle] = useState('')
   const [due, setDue] = useState('')
   const [hours, setHours] = useState('')
-
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-
   const [deletingTask, setDeletingTask] =
     useState<Task | null>(null)
   const [confirmationTitle, setConfirmationTitle] =
@@ -105,46 +93,36 @@ export default function Tasks({
   const [deleteError, setDeleteError] = useState('')
   const [updatingId, setUpdatingId] =
     useState<string | null>(null)
-
   const [showTrash, setShowTrash] = useState(false)
   const [trashRefreshKey, setTrashRefreshKey] = useState(0)
-
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
-
     try {
       const { data: auth, error: authError } =
         await supabase.auth.getUser()
-
       if (authError || !auth.user) {
         throw new Error('Debes iniciar sesión.')
       }
-
       let query = supabase
         .from('tasks')
         .select('*')
         .eq('user_id', auth.user.id)
         .is('deleted_at', null)
-
       if (activePracticeId !== undefined) {
         if (!activePracticeId) {
           setTasks([])
           return
         }
-
         query = query.eq('practice_id', activePracticeId)
       }
-
       const { data, error: loadError } = await query
         .order('due_date', {
           ascending: true,
           nullsFirst: false,
         })
         .order('created_at', { ascending: true })
-
       if (loadError) throw loadError
-
       setTasks((data ?? []) as Task[])
     } catch (err) {
       setError(
@@ -156,45 +134,29 @@ export default function Tasks({
       setLoading(false)
     }
   }, [activePracticeId])
-
   useEffect(() => {
     void load()
   }, [load])
-
   const filteredTasks = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('es')
-
     return tasks.filter((task) => {
       const matchesSearch =
         !query ||
         task.title.toLocaleLowerCase('es').includes(query)
-
       const matchesStatus =
         statusFilter === 'all' ||
         task.status === statusFilter
-
       return matchesSearch && matchesStatus
     })
   }, [tasks, search, statusFilter])
-
-  const todoTasks = filteredTasks.filter(
-    (task) => task.status === 'todo'
-  )
-
-  const doingTasks = filteredTasks.filter(
-    (task) => task.status === 'doing'
-  )
-
   const doneTasks = filteredTasks.filter(
     (task) => task.status === 'done'
   )
-
   const totalPlannedHours = tasks.reduce(
     (total, task) =>
       total + Number(task.planned_hours ?? 0),
     0
   )
-
   const completedHours = tasks
     .filter((task) => task.status === 'done')
     .reduce(
@@ -202,7 +164,6 @@ export default function Tasks({
         total + Number(task.planned_hours ?? 0),
       0
     )
-
   const completion = tasks.length
     ? Math.round(
       (tasks.filter((task) => task.status === 'done')
@@ -211,25 +172,19 @@ export default function Tasks({
       100
     )
     : 0
-
   const overdueTasks = tasks.filter(isOverdue)
-
   const addTask = async (
     event: FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault()
     setError('')
     setNotice('')
-
     const cleanTitle = title.trim()
-
     if (!cleanTitle) {
       setError('Escribe un título para la tarea.')
       return
     }
-
     const parsedHours = hours ? Number(hours) : null
-
     if (
       parsedHours !== null &&
       (!Number.isFinite(parsedHours) ||
@@ -241,22 +196,17 @@ export default function Tasks({
       )
       return
     }
-
     if (activePracticeId === null) {
       setError('Selecciona una práctica activa.')
       return
     }
-
     setSaving(true)
-
     try {
       const { data: auth, error: authError } =
         await supabase.auth.getUser()
-
       if (authError || !auth.user) {
         throw new Error('Tu sesión no está disponible.')
       }
-
       const payload: {
         user_id: string
         title: string
@@ -271,23 +221,18 @@ export default function Tasks({
         planned_hours: parsedHours,
         status: 'todo',
       }
-
       if (activePracticeId) {
         payload.practice_id = activePracticeId
       }
-
       const { error: insertError } = await supabase
         .from('tasks')
         .insert(payload)
-
       if (insertError) throw insertError
-
       setTitle('')
       setDue('')
       setHours('')
       setShowForm(false)
       setActiveTab('backlog')
-
       await load()
       setNotice('Tarea creada correctamente.')
     } catch (err) {
@@ -300,28 +245,23 @@ export default function Tasks({
       setSaving(false)
     }
   }
-
   const moveTask = async (
     task: Task,
     status: TaskStatus
   ) => {
     if (task.status === status || updatingId) return
-
     setError('')
     setNotice('')
     setUpdatingId(task.id)
-
     try {
       const result = await changeTaskStatus(
         task.id,
         status
       )
-
       if (!result.success) {
         setError(result.message)
         return
       }
-
       await load()
       setNotice(result.message)
     } catch (err) {
@@ -334,7 +274,6 @@ export default function Tasks({
       setUpdatingId(null)
     }
   }
-
   const requestDelete = (task: Task) => {
     setDeletingTask(task)
     setConfirmationTitle('')
@@ -342,35 +281,27 @@ export default function Tasks({
     setError('')
     setNotice('')
   }
-
   const cancelDelete = () => {
     if (deleting) return
-
     setDeletingTask(null)
     setConfirmationTitle('')
     setDeleteError('')
   }
-
   const confirmDelete = async () => {
     if (!deletingTask || deleting) return
-
     setDeleting(true)
     setDeleteError('')
-
     try {
       const result = await trashTask(
         deletingTask,
         confirmationTitle
       )
-
       if (!result.success) {
         setDeleteError(result.message)
         return
       }
-
       setDeletingTask(null)
       setConfirmationTitle('')
-
       await load()
       setTrashRefreshKey((value) => value + 1)
       setNotice(result.message)
@@ -384,7 +315,6 @@ export default function Tasks({
       setDeleting(false)
     }
   }
-
   const renderTask = (task: Task) => {
     const previous: TaskStatus | null =
       task.status === 'done'
@@ -392,14 +322,12 @@ export default function Tasks({
         : task.status === 'doing'
           ? 'todo'
           : null
-
     const next: TaskStatus | null =
       task.status === 'todo'
         ? 'doing'
         : task.status === 'doing'
           ? 'done'
           : null
-
     return (
       <article
         key={task.id}
@@ -415,12 +343,10 @@ export default function Tasks({
             >
               {task.title}
             </h3>
-
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
               <span className="rounded-md border border-[var(--border-soft)] bg-[var(--bg-subtle)] px-2 py-1">
                 {STATUS_LABEL[task.status]}
               </span>
-
               {task.due_date && (
                 <span className="rounded-md border border-[var(--border-soft)] px-2 py-1">
                   {isOverdue(task)
@@ -429,7 +355,6 @@ export default function Tasks({
                   {formatDate(task.due_date)}
                 </span>
               )}
-
               {task.planned_hours != null && (
                 <span className="rounded-md border border-[var(--border-soft)] px-2 py-1">
                   {task.planned_hours} h estimadas
@@ -437,7 +362,6 @@ export default function Tasks({
               )}
             </div>
           </div>
-
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             {previous && (
               <button
@@ -451,7 +375,6 @@ export default function Tasks({
                 ← Atrás
               </button>
             )}
-
             {next && (
               <button
                 type="button"
@@ -468,7 +391,6 @@ export default function Tasks({
                     : 'Completar →'}
               </button>
             )}
-
             <button
               type="button"
               disabled={updatingId !== null}
@@ -483,7 +405,6 @@ export default function Tasks({
       </article>
     )
   }
-
   const renderTaskList = (
     items: Task[],
     emptyMessage: string
@@ -495,7 +416,6 @@ export default function Tasks({
         </p>
       )
     }
-
     if (items.length === 0) {
       return (
         <div className={`${cardClass} p-8 text-center`}>
@@ -505,14 +425,12 @@ export default function Tasks({
         </div>
       )
     }
-
     return (
       <div className="space-y-3">
         {items.map(renderTask)}
       </div>
     )
   }
-
   const renderStat = (
     label: string,
     value: string | number,
@@ -530,7 +448,6 @@ export default function Tasks({
       </p>
     </div>
   )
-
   return (
     <section className="animate-fade-in space-y-6 pb-8 text-[var(--text-primary)]">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -538,18 +455,15 @@ export default function Tasks({
           <p className="text-sm text-[var(--text-secondary)]">
             Organización del trabajo
           </p>
-
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">
             Tareas
           </h1>
-
           <p className="mt-2 max-w-2xl text-sm text-[var(--text-secondary)]">
             Organiza tu backlog, controla el avance y
             planifica tus actividades. Las horas reales
             se registran exclusivamente en la bitácora.
           </p>
         </div>
-
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -561,7 +475,6 @@ export default function Tasks({
           >
             {showTrash ? 'Cerrar papelera' : 'Papelera'}
           </button>
-
           <button
             type="button"
             onClick={() => {
@@ -575,7 +488,6 @@ export default function Tasks({
           </button>
         </div>
       </header>
-
       {error && (
         <div
           role="alert"
@@ -584,7 +496,6 @@ export default function Tasks({
           {error}
         </div>
       )}
-
       {notice && (
         <div
           role="status"
@@ -593,7 +504,6 @@ export default function Tasks({
           {notice}
         </div>
       )}
-
       {showTrash ? (
         <div className={`${cardClass} p-4 sm:p-5`}>
           <TaskTrash
@@ -617,7 +527,6 @@ export default function Tasks({
                   La tarea se guardará en tu backlog.
                 </p>
               </div>
-
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <label className="space-y-1.5 md:col-span-3">
                   <span className="text-sm font-medium">
@@ -635,7 +544,6 @@ export default function Tasks({
                     className={inputClass}
                   />
                 </label>
-
                 <label className="space-y-1.5">
                   <span className="text-sm font-medium">
                     Horas estimadas
@@ -653,7 +561,6 @@ export default function Tasks({
                     className={inputClass}
                   />
                 </label>
-
                 <label className="space-y-1.5">
                   <span className="text-sm font-medium">
                     Fecha límite
@@ -668,7 +575,6 @@ export default function Tasks({
                   />
                 </label>
               </div>
-
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <button
                   type="button"
@@ -678,7 +584,6 @@ export default function Tasks({
                 >
                   Cancelar
                 </button>
-
                 <button
                   type="submit"
                   disabled={saving}
@@ -691,7 +596,6 @@ export default function Tasks({
               </div>
             </form>
           )}
-
           <nav
             aria-label="Secciones de tareas"
             className="flex gap-1 overflow-x-auto border-b border-[var(--border-soft)]"
@@ -715,7 +619,6 @@ export default function Tasks({
               </button>
             ))}
           </nav>
-
           <div className="flex flex-col gap-3 sm:flex-row">
             <label className="min-w-0 flex-1">
               <span className="sr-only">
@@ -730,7 +633,6 @@ export default function Tasks({
                 className={inputClass}
               />
             </label>
-
             <label className="sm:w-48">
               <span className="sr-only">
                 Filtrar por estado
@@ -761,7 +663,6 @@ export default function Tasks({
               </select>
             </label>
           </div>
-
           {activeTab === 'resumen' && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -770,7 +671,6 @@ export default function Tasks({
                   tasks.length,
                   'Tareas activas registradas'
                 )}
-
                 {renderStat(
                   'Por hacer',
                   tasks.filter(
@@ -778,7 +678,6 @@ export default function Tasks({
                   ).length,
                   'Pendientes de iniciar'
                 )}
-
                 {renderStat(
                   'Completadas',
                   tasks.filter(
@@ -786,14 +685,12 @@ export default function Tasks({
                   ).length,
                   `${completion}% del total`
                 )}
-
                 {renderStat(
                   'Vencidas',
                   overdueTasks.length,
                   'Pendientes fuera de plazo'
                 )}
               </div>
-
               <div className={`${cardClass} p-4 sm:p-5`}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
@@ -808,7 +705,6 @@ export default function Tasks({
                     {completion}%
                   </span>
                 </div>
-
                 <div
                   className="mt-4 h-2.5 overflow-hidden rounded-full bg-[var(--bg-subtle)]"
                   role="progressbar"
@@ -824,7 +720,6 @@ export default function Tasks({
                     }}
                   />
                 </div>
-
                 <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-[var(--text-secondary)]">
                   <span>
                     Horas estimadas: {totalPlannedHours} h
@@ -835,7 +730,6 @@ export default function Tasks({
                   </span>
                 </div>
               </div>
-
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="font-semibold">
@@ -851,7 +745,6 @@ export default function Tasks({
                     Ver backlog →
                   </button>
                 </div>
-
                 {renderTaskList(
                   filteredTasks.slice(0, 5),
                   'No hay tareas para mostrar.'
@@ -877,42 +770,20 @@ export default function Tasks({
               }}
             />
           )}
-
           {activeTab === 'trabajo' && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-lg font-semibold">
-                  Trabajo actual
-                </h2>
-                <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                  Concéntrate en las tareas que ya comenzaste.
-                </p>
-              </div>
-
-              <section className="space-y-3">
-                <h3 className="text-sm font-semibold text-[var(--text-secondary)]">
-                  En curso ({doingTasks.length})
-                </h3>
-
-                {renderTaskList(
-                  doingTasks,
-                  'No tienes tareas en curso.'
-                )}
-              </section>
-
-              <section className="space-y-3">
-                <h3 className="text-sm font-semibold text-[var(--text-secondary)]">
-                  Por hacer ({todoTasks.length})
-                </h3>
-
-                {renderTaskList(
-                  todoTasks,
-                  'No tienes tareas pendientes.'
-                )}
-              </section>
-            </div>
+            <WeeklyPlanner
+              tasks={tasks}
+              activePracticeId={activePracticeId}
+              onNewTask={() => {
+                setShowForm(true)
+                setShowTrash(false)
+                window.scrollTo({
+                  top: 0,
+                  behavior: 'smooth',
+                })
+              }}
+            />
           )}
-
           {activeTab === 'informes' && (
             <div className="space-y-6">
               <div>
@@ -923,32 +794,31 @@ export default function Tasks({
                   Indicadores calculados a partir de tus tareas guardadas.
                 </p>
               </div>
-
+              <WeeklyPlannerReport
+                tasks={tasks}
+                activePracticeId={activePracticeId}
+              />
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {renderStat(
                   'Tareas completadas',
                   doneTasks.length,
                   `De ${tasks.length} tareas`
                 )}
-
                 {renderStat(
                   'Horas estimadas',
                   `${totalPlannedHours} h`,
                   'No son horas reales registradas'
                 )}
-
                 {renderStat(
                   'Estimación completada',
                   `${completedHours} h`,
                   'Horas planificadas de tareas terminadas'
                 )}
               </div>
-
               <div className={`${cardClass} p-4 sm:p-5`}>
                 <h3 className="font-semibold">
                   Distribución por estado
                 </h3>
-
                 <div className="mt-4 space-y-4">
                   {(
                     [
@@ -960,13 +830,11 @@ export default function Tasks({
                     const count = tasks.filter(
                       (task) => task.status === status
                     ).length
-
                     const percentage = tasks.length
                       ? Math.round(
                         (count / tasks.length) * 100
                       )
                       : 0
-
                     return (
                       <div key={status}>
                         <div className="mb-1 flex justify-between gap-3 text-sm">
@@ -975,7 +843,6 @@ export default function Tasks({
                             {count} · {percentage}%
                           </span>
                         </div>
-
                         <div className="h-2 overflow-hidden rounded-full bg-[var(--bg-subtle)]">
                           <div
                             className="h-full rounded-full bg-[var(--color-brand-500)]"
@@ -993,7 +860,6 @@ export default function Tasks({
           )}
         </>
       )}
-
       {deletingTask && (
         <div
           className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 p-4"
@@ -1019,24 +885,20 @@ export default function Tasks({
               >
                 Enviar tarea a la papelera
               </h2>
-
               <p className="mt-2 text-sm text-[var(--text-secondary)]">
                 La tarea permanecerá en la papelera
                 durante 60 días. Podrás restaurarla
                 antes de que expire.
               </p>
             </div>
-
             <div className="break-words rounded-lg bg-[var(--bg-subtle)] p-3 text-sm font-medium">
               {deletingTask.title}
             </div>
-
             <label className="block space-y-2">
               <span className="text-sm">
                 Escribe exactamente el nombre de la
                 tarea para confirmar.
               </span>
-
               <input
                 autoFocus
                 value={confirmationTitle}
@@ -1049,13 +911,11 @@ export default function Tasks({
                 placeholder="Nombre exacto de la tarea"
               />
             </label>
-
             {deleteError && (
               <p role="alert" className="text-sm text-red-500">
                 {deleteError}
               </p>
             )}
-
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
@@ -1065,7 +925,6 @@ export default function Tasks({
               >
                 Cancelar
               </button>
-
               <button
                 type="button"
                 onClick={() =>

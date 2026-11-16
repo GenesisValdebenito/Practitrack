@@ -1,28 +1,55 @@
-
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Check, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { setLastEmail } from '../lib/session'
+import AuthLayout from '../components/AuthLayout'
+import GoogleAuthButton from '../components/GoogleAuthButton'
+import Turnstile from '../components/Turnstile'
 
 export default function Register() {
     const [fullName, setFullName] = useState('')
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
+    const [acceptedTerms, setAcceptedTerms] = useState(false)
+    const [confirmedData, setConfirmedData] = useState(false)
+    const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+    const [turnstileKey, setTurnstileKey] = useState(0)
     const [loading, setLoading] = useState(false)
+    const [resending, setResending] = useState(false)
     const [error, setError] = useState('')
     const [success, setSuccess] = useState(false)
+    const [resendMessage, setResendMessage] = useState('')
+
+    const passwordChecks = [
+        { label: 'Al menos 8 caracteres', ok: password.length >= 8 },
+        { label: 'Una letra mayúscula', ok: /[A-Z]/.test(password) },
+        { label: 'Un número', ok: /\d/.test(password) },
+        {
+            label: 'Las contraseñas coinciden',
+            ok: password.length > 0 && password === confirmPassword,
+        },
+    ]
+
+    const passwordValid = passwordChecks.every(check => check.ok)
 
     const submit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault()
         setError('')
 
-        if (password.length < 6) {
-            setError('La contraseña debe tener al menos 6 caracteres.')
+        if (!passwordValid) {
+            setError('Completa todos los requisitos de la contraseña.')
             return
         }
 
-        if (password !== confirmPassword) {
-            setError('Las contraseñas no coinciden.')
+        if (!acceptedTerms || !confirmedData) {
+            setError('Debes aceptar los términos y confirmar tus datos para continuar.')
+            return
+        }
+
+        if (!turnstileToken) {
+            setError('Completa la verificación de seguridad para continuar.')
             return
         }
 
@@ -36,6 +63,7 @@ export default function Register() {
                     full_name: fullName.trim(),
                 },
                 emailRedirectTo: `${window.location.origin}/`,
+                captchaToken: turnstileToken,
             },
         })
 
@@ -47,11 +75,13 @@ export default function Register() {
                     ? 'No se pudo crear la cuenta con esos datos. Si ya tienes una cuenta, intenta iniciar sesión.'
                     : signUpError.message
             )
+            setTurnstileToken(null)
+            setTurnstileKey(key => key + 1)
             return
         }
 
-        // Si Supabase devuelve una sesión, App.tsx continuará con el onboarding.
-        // Si requiere confirmación de correo, mostramos el mensaje correspondiente.
+        setLastEmail(email.trim())
+
         if (data.session) {
             setSuccess(false)
         } else {
@@ -59,153 +89,260 @@ export default function Register() {
         }
     }
 
+    const resendVerification = async () => {
+        setError('')
+        setResendMessage('')
+        setResending(true)
+
+        const { error: resendError } = await supabase.auth.resend({
+            type: 'signup',
+            email: email.trim(),
+            options: {
+                emailRedirectTo: `${window.location.origin}/`,
+            },
+        })
+
+        setResending(false)
+
+        if (resendError) {
+            setError(resendError.message)
+        } else {
+            setResendMessage('Te reenviamos el correo de verificación. Revisa tu bandeja de entrada y spam.')
+        }
+    }
+
     return (
-        <main className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-10">
-            <div className="w-full max-w-md">
-                <Link to="/" className="flex items-center justify-center gap-3 mb-8">
-                    <img
-                        src="/icon-practitrack.png"
-                        alt=""
-                        className="w-11 h-11 object-contain"
-                    />
-                    <span className="text-2xl font-bold tracking-tight text-[#101F3A]">
-                        PractiTrack
-                    </span>
-                </Link>
+        <AuthLayout
+            footer={
+                <span>
+                    PractiTrack ·{' '}
+                    <Link to="/" className="underline hover:text-white">
+                        Volver al inicio
+                    </Link>
+                </span>
+            }
+        >
+            {success ? (
+                <div className="py-2 text-center">
+                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20 text-green-400">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M5 12.5 9.5 17 19 7.5" />
+                            <circle cx="12" cy="12" r="10" />
+                        </svg>
+                    </div>
 
-                <section className="bg-white border border-slate-200 rounded-2xl shadow-sm p-7 sm:p-9">
-                    {success ? (
-                        <div className="text-center py-5">
-                            <div className="w-14 h-14 mx-auto rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-5">
-                                <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M5 12.5 9.5 17 19 7.5" />
-                                    <circle cx="12" cy="12" r="10" />
-                                </svg>
-                            </div>
-                            <h1 className="text-2xl font-bold text-[#101F3A]">
-                                ¡Ya casi estás!
-                            </h1>
-                            <p className="text-sm text-slate-500 mt-3 leading-6">
-                                Te enviamos un correo para confirmar tu cuenta. Revisa tu bandeja de entrada y también la carpeta de spam.
-                            </p>
-                            <Link
-                                to="/login"
-                                className="inline-flex mt-7 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 text-sm transition"
-                            >
-                                Ir a iniciar sesión
-                            </Link>
+                    <h1 className="text-xl font-bold text-white">
+                        ¡Ya casi estás!
+                    </h1>
+
+                    <p className="mt-2.5 text-[13px] leading-5 text-slate-300">
+                        Te enviamos un correo a <strong className="text-white">{email.trim()}</strong> para
+                        verificar tu cuenta. Revisa tu bandeja de entrada y también la carpeta de spam.
+                    </p>
+
+                    {resendMessage && (
+                        <div role="status" className="mt-3 rounded-xl border border-green-500/30 bg-green-500/10 px-3.5 py-2.5 text-[13px] text-green-400">
+                            {resendMessage}
                         </div>
-                    ) : (
-                        <>
-                            <div className="mb-7">
-                                <p className="text-sm font-semibold text-orange-600 mb-2">
-                                    COMIENZA TU EXPERIENCIA
-                                </p>
-                                <h1 className="text-2xl font-bold text-[#101F3A]">
-                                    Crea tu cuenta
-                                </h1>
-                                <p className="text-sm text-slate-500 mt-2">
-                                    Primero creemos tu espacio. Luego podrás configurar tu práctica paso a paso.
-                                </p>
-                            </div>
-
-                            <form onSubmit={submit} className="space-y-5">
-                                <div>
-                                    <label htmlFor="register-name" className="block text-sm font-medium text-slate-700 mb-1.5">
-                                        Nombre completo
-                                    </label>
-                                    <input
-                                        id="register-name"
-                                        type="text"
-                                        autoComplete="name"
-                                        required
-                                        maxLength={100}
-                                        value={fullName}
-                                        onChange={(event) => setFullName(event.target.value)}
-                                        placeholder="¿Cómo te llamas?"
-                                        className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label htmlFor="register-email" className="block text-sm font-medium text-slate-700 mb-1.5">
-                                        Correo electrónico
-                                    </label>
-                                    <input
-                                        id="register-email"
-                                        type="email"
-                                        autoComplete="email"
-                                        required
-                                        value={email}
-                                        onChange={(event) => setEmail(event.target.value)}
-                                        placeholder="tu@correo.cl"
-                                        className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label htmlFor="register-password" className="block text-sm font-medium text-slate-700 mb-1.5">
-                                        Contraseña
-                                    </label>
-                                    <input
-                                        id="register-password"
-                                        type="password"
-                                        autoComplete="new-password"
-                                        required
-                                        minLength={6}
-                                        value={password}
-                                        onChange={(event) => setPassword(event.target.value)}
-                                        placeholder="Mínimo 6 caracteres"
-                                        className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label htmlFor="register-confirm" className="block text-sm font-medium text-slate-700 mb-1.5">
-                                        Confirmar contraseña
-                                    </label>
-                                    <input
-                                        id="register-confirm"
-                                        type="password"
-                                        autoComplete="new-password"
-                                        required
-                                        minLength={6}
-                                        value={confirmPassword}
-                                        onChange={(event) => setConfirmPassword(event.target.value)}
-                                        placeholder="Repite tu contraseña"
-                                        className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-                                    />
-                                </div>
-
-                                {error && (
-                                    <div role="alert" className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-                                        {error}
-                                    </div>
-                                )}
-
-                                <button
-                                    type="submit"
-                                    disabled={loading}
-                                    className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-3 transition"
-                                >
-                                    {loading ? 'Creando tu cuenta...' : 'Crear mi cuenta'}
-                                </button>
-                            </form>
-
-                            <p className="text-center text-sm text-slate-500 mt-7">
-                                ¿Ya tienes una cuenta?{' '}
-                                <Link to="/login" className="font-semibold text-blue-600 hover:text-blue-700">
-                                    Inicia sesión
-                                </Link>
-                            </p>
-                        </>
                     )}
-                </section>
 
-                <p className="text-center text-xs text-slate-400 mt-6">
-                    PractiTrack · Tu práctica, más organizada.
-                </p>
-            </div>
-        </main>
+                    {error && (
+                        <div role="alert" className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-[13px] text-red-400">
+                            {error}
+                        </div>
+                    )}
+
+                    <button
+                        type="button"
+                        onClick={() => void resendVerification()}
+                        disabled={resending}
+                        className="mt-4 w-full rounded-xl border border-white/10 bg-[#131c31] py-2.5 text-sm font-semibold text-white transition hover:bg-[#1a2540] disabled:opacity-60"
+                    >
+                        {resending ? 'Reenviando...' : 'Reenviar correo de verificación'}
+                    </button>
+
+                    <Link
+                        to="/login"
+                        className="mt-2.5 inline-flex w-full items-center justify-center rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
+                    >
+                        Ir a iniciar sesión
+                    </Link>
+                </div>
+            ) : (
+                <>
+                    <div className="mb-5">
+                        <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-brand-400">
+                            COMIENZA TU EXPERIENCIA
+                        </p>
+                        <h1 className="text-xl font-bold text-white">
+                            Crea tu cuenta
+                        </h1>
+                        <p className="mt-1.5 text-[13px] leading-5 text-slate-400">
+                            Primero creemos tu espacio. Luego podrás configurar tu práctica paso a paso.
+                        </p>
+                    </div>
+
+                    <GoogleAuthButton
+                        label="Registrarme con Google"
+                        disabled={loading}
+                        onError={setError}
+                    />
+
+                    <div className="my-4 flex items-center gap-3">
+                        <div className="h-px flex-1 bg-white/10" />
+                        <span className="text-xs text-slate-400">O regístrate con tu correo</span>
+                        <div className="h-px flex-1 bg-white/10" />
+                    </div>
+
+                    <form onSubmit={submit} className="space-y-3">
+                        <div>
+                            <label htmlFor="register-name" className="mb-1.5 block text-[13px] font-medium text-slate-200">
+                                Nombre completo
+                            </label>
+                            <input
+                                id="register-name"
+                                type="text"
+                                autoComplete="name"
+                                required
+                                maxLength={100}
+                                value={fullName}
+                                onChange={(event) => setFullName(event.target.value)}
+                                placeholder="¿Cómo te llamas?"
+                                className="w-full rounded-xl border border-white/15 bg-[#131c31] px-3.5 py-2.5 text-sm text-white placeholder:text-slate-400 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/20"
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="register-email" className="mb-1.5 block text-[13px] font-medium text-slate-200">
+                                Correo electrónico
+                            </label>
+                            <input
+                                id="register-email"
+                                type="email"
+                                autoComplete="email"
+                                required
+                                value={email}
+                                onChange={(event) => setEmail(event.target.value)}
+                                placeholder="tu@correo.cl"
+                                className="w-full rounded-xl border border-white/15 bg-[#131c31] px-3.5 py-2.5 text-sm text-white placeholder:text-slate-400 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/20"
+                            />
+                            <p className="mt-1.5 text-[11px] text-slate-400">
+                                Te enviaremos un correo para verificar tu cuenta.
+                            </p>
+                        </div>
+
+                        <div>
+                            <label htmlFor="register-password" className="mb-1.5 block text-[13px] font-medium text-slate-200">
+                                Contraseña
+                            </label>
+                            <input
+                                id="register-password"
+                                type="password"
+                                autoComplete="new-password"
+                                required
+                                value={password}
+                                onChange={(event) => setPassword(event.target.value)}
+                                placeholder="Crea una contraseña segura"
+                                className="w-full rounded-xl border border-white/15 bg-[#131c31] px-3.5 py-2.5 text-sm text-white placeholder:text-slate-400 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/20"
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="register-confirm" className="mb-1.5 block text-[13px] font-medium text-slate-200">
+                                Confirmar contraseña
+                            </label>
+                            <input
+                                id="register-confirm"
+                                type="password"
+                                autoComplete="new-password"
+                                required
+                                value={confirmPassword}
+                                onChange={(event) => setConfirmPassword(event.target.value)}
+                                placeholder="Repite tu contraseña"
+                                className="w-full rounded-xl border border-white/15 bg-[#131c31] px-3.5 py-2.5 text-sm text-white placeholder:text-slate-400 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/20"
+                            />
+                        </div>
+
+                        {/* Caja de requisitos ahora 100% oscura */}
+                        <div className="rounded-xl border border-white/10 bg-[#131c31]/80 px-3.5 py-2.5">
+                            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                                Requisitos de la contraseña
+                            </p>
+                            <ul className="grid grid-cols-2 gap-x-2 gap-y-1">
+                                {passwordChecks.map(check => (
+                                    <li key={check.label} className="flex items-start gap-1.5 text-[11px] leading-4">
+                                        {check.ok ? (
+                                            <Check size={13} className="mt-px shrink-0 text-green-400" />
+                                        ) : (
+                                            <X size={13} className="mt-px shrink-0 text-slate-500" />
+                                        )}
+                                        <span className={check.ok ? 'text-slate-200' : 'text-slate-400'}>
+                                            {check.label}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+
+                        <div className="space-y-2 pt-1">
+                            <label className="flex items-start gap-2.5 text-[11px] leading-4 text-slate-300">
+                                <input
+                                    type="checkbox"
+                                    checked={acceptedTerms}
+                                    onChange={(event) => setAcceptedTerms(event.target.checked)}
+                                    className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-white/20 bg-[#131c31] accent-brand-500"
+                                />
+                                <span>
+                                    Acepto los{' '}
+                                    <Link to="/terminos" className="font-semibold text-brand-400 underline hover:text-brand-300">
+                                        Términos y Condiciones
+                                    </Link>{' '}
+                                    de PractiTrack.
+                                </span>
+                            </label>
+
+                            <label className="flex items-start gap-2.5 text-[11px] leading-4 text-slate-300">
+                                <input
+                                    type="checkbox"
+                                    checked={confirmedData}
+                                    onChange={(event) => setConfirmedData(event.target.checked)}
+                                    className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-white/20 bg-[#131c31] accent-brand-500"
+                                />
+                                <span>
+                                    Confirmo que la información ingresada es verídica y que usaré PractiTrack
+                                    para mi práctica académica o profesional.
+                                </span>
+                            </label>
+                        </div>
+
+                        {/* Turnstile en modo oscuro */}
+                        <div className="flex justify-center pt-1">
+                            <Turnstile key={turnstileKey} onToken={setTurnstileToken} />
+                        </div>
+
+                        {error && (
+                            <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-[13px] text-red-400">
+                                {error}
+                            </div>
+                        )}
+
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-60"
+                        >
+                            {loading ? 'Creando tu cuenta...' : 'Crear mi cuenta'}
+                        </button>
+                    </form>
+
+                    <p className="mt-4 text-center text-[13px] text-slate-400">
+                        ¿Ya tienes una cuenta?{' '}
+                        <Link to="/login" className="font-semibold text-brand-400 hover:text-brand-300">
+                            Inicia sesión
+                        </Link>
+                    </p>
+                </>
+            )}
+        </AuthLayout>
     )
 }

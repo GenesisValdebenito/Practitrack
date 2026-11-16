@@ -6,6 +6,7 @@ import {
     FONT_SIZES,
     CONTENT_WIDTHS,
     applyAllPreferences,
+    persistThemeToProfile,
     getStoredMode,
     getStoredColor,
     getStoredFont,
@@ -37,6 +38,14 @@ export default function AppearancePanel() {
         if (patch.size !== undefined) setSize(patch.size)
         if (patch.width !== undefined) setWidth(patch.width)
         applyAllPreferences(patch)
+
+        // Persistir el tema en el perfil del usuario para que no se reinicie.
+        if (patch.mode !== undefined || patch.color !== undefined) {
+            void persistThemeToProfile({
+                mode: patch.mode,
+                color: patch.color,
+            })
+        }
     }
 
     return (
