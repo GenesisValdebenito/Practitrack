@@ -121,6 +121,48 @@
     min-height: 600px;
 }
 
+.pizarra-toast {
+    position: fixed;
+    right: 24px;
+    top: 24px;
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 260px;
+    max-width: 360px;
+    padding: 12px 15px;
+    border: 1px solid #bbf7d0;
+    border-radius: 12px;
+    background: #f0fdf4;
+    color: #15803d;
+    font-size: 13px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
+    animation: pizarra-toast-in 220ms ease both;
+}
+
+.pizarra-toast button {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+@keyframes pizarra-toast-in {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .pizarra-search,
 .pizarra-field input,
 .pizarra-field textarea {

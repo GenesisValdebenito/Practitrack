@@ -661,7 +661,7 @@ export default function Stickys({ activePracticeId }: StickysProps) {
             )}
 
             {success && (
-                <div className="pizarra-success" role="status">
+                <div className="pizarra-toast" role="status">
                     <span>{success}</span>
                     <button type="button" onClick={() => setSuccess('')} aria-label="Cerrar aviso">
                         ×
