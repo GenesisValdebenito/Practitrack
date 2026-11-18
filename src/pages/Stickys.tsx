@@ -123,6 +123,7 @@ export default function Stickys({ activePracticeId }: StickysProps) {
     const [notes, setNotes] = useState<BoardNote[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
+    const [success, setSuccess] = useState('')
     const [userId, setUserId] = useState<string | null>(null)
     const [offset, setOffset] = useState<Point>({ x: 0, y: 0 })
     const [zoom, setZoom] = useState(1)
@@ -131,6 +132,7 @@ export default function Stickys({ activePracticeId }: StickysProps) {
     const [form, setForm] = useState<NoteForm>({ ...DEFAULT_FORM })
     const [saving, setSaving] = useState(false)
     const [search, setSearch] = useState('')
+    const [pendingDelete, setPendingDelete] = useState<BoardNote | null>(null)
 
     const loadNotes = useCallback(async () => {
         setLoading(true)
@@ -168,6 +170,13 @@ export default function Stickys({ activePracticeId }: StickysProps) {
     useEffect(() => {
         void loadNotes()
     }, [loadNotes])
+
+    // Borrar el mensaje de éxito después de 3 segundos
+    useEffect(() => {
+        if (!success) return
+        const t = setTimeout(() => setSuccess(''), 3000)
+        return () => clearTimeout(t)
+    }, [success])
 
     useEffect(() => {
         return () => {
@@ -326,22 +335,30 @@ export default function Stickys({ activePracticeId }: StickysProps) {
         }
     }
 
-    async function deleteNote(note: BoardNote) {
-        if (!window.confirm('¿Quieres eliminar esta nota de la pizarra?')) return
+    function requestDelete(note: BoardNote) {
+        setError('')
+        setPendingDelete(note)
+    }
+
+    async function confirmDelete() {
+        if (!pendingDelete) return
+
+        const noteToDelete = pendingDelete
+        setPendingDelete(null)
 
         const { error: deleteError } = await supabase
             .from(TABLE)
             .delete()
-            .eq('id', note.id)
+            .eq('id', noteToDelete.id)
 
         if (deleteError) {
             setError(`No se pudo eliminar la nota: ${deleteError.message}`)
-            return
+        } else {
+            setNotes((current) => current.filter((item) => item.id !== noteToDelete.id))
+            setSuccess('Nota eliminada correctamente')
         }
-
-        setNotes((current) => current.filter((item) => item.id !== note.id))
-        if (selectedId === note.id) setSelectedId(null)
-        if (editingNote?.id === note.id) setEditingNote(null)
+        if (selectedId === noteToDelete.id) setSelectedId(null)
+        if (editingNote?.id === noteToDelete.id) setEditingNote(null)
     }
 
     function duplicateNote(note: BoardNote) {
@@ -643,6 +660,15 @@ export default function Stickys({ activePracticeId }: StickysProps) {
                 </div>
             )}
 
+            {success && (
+                <div className="pizarra-success" role="status">
+                    <span>{success}</span>
+                    <button type="button" onClick={() => setSuccess('')} aria-label="Cerrar aviso">
+                        ×
+                    </button>
+                </div>
+            )}
+
             <section
                 className="pizarra-board"
                 ref={boardRef}
@@ -708,7 +734,7 @@ export default function Stickys({ activePracticeId }: StickysProps) {
                                         title="Eliminar nota"
                                         aria-label="Eliminar nota"
                                         onPointerDown={(event) => event.stopPropagation()}
-                                        onClick={() => void deleteNote(note)}
+                                        onClick={() => requestDelete(note)}
                                     >
                                         ×
                                     </button>
@@ -948,6 +974,41 @@ export default function Stickys({ activePracticeId }: StickysProps) {
                             </button>
                         </footer>
                     </form>
+                </div>
+            )}
+
+            {pendingDelete && (
+                <div
+                    className="pizarra-modal-backdrop"
+                    onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) {
+                            setPendingDelete(null)
+                        }
+                    }}
+                >
+                    <div className="pizarra-confirm" role="alertdialog" aria-labelledby="confirm-delete-title">
+                        <h2 id="confirm-delete-title">¿Eliminar esta nota?</h2>
+                        <p>
+                            «{pendingDelete.title || 'Sin título'}» se eliminará de tu pizarra.
+                            Esta acción no se puede deshacer.
+                        </p>
+                        <footer className="pizarra-editor-footer">
+                            <button
+                                type="button"
+                                className="pizarra-button"
+                                onClick={() => setPendingDelete(null)}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                className="pizarra-button pizarra-button-danger"
+                                onClick={() => void confirmDelete()}
+                            >
+                                Eliminar nota
+                            </button>
+                        </footer>
+                    </div>
                 </div>
             )}
         </main>

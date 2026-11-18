@@ -266,11 +266,12 @@ export default function Schedule({ activePracticeId }: ScheduleProps) {
 
   return (
     <div className="min-w-0 space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+      <header className="flex flex-col items-start gap-3" style={{ height: 'auto', overflow: 'visible' }}>
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-primary">Calendario de jornada</h1>
-          <p className="mt-1 text-sm text-secondary">Organiza tus horarios y consulta las horas planificadas.</p>
+          <p className="text-sm text-secondary" style={{ marginTop: 0 }}>Organiza tus horarios y consulta las horas planificadas.</p>
         </div>
+
         <button type="button" onClick={() => openNewForm()} disabled={!activePracticeId} className="btn-primary shrink-0 disabled:opacity-50">+ Nueva jornada</button>
       </header>
 
