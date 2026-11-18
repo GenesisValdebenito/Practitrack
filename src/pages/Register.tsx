@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, X } from 'lucide-react'
+import { Check, Eye, EyeOff, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { setLastEmail } from '../lib/session'
 import AuthLayout from '../components/AuthLayout'
@@ -21,6 +21,8 @@ export default function Register() {
     const [error, setError] = useState('')
     const [success, setSuccess] = useState(false)
     const [resendMessage, setResendMessage] = useState('')
+    const [showPassword, setShowPassword] = useState(false)
+    const [showConfirm, setShowConfirm] = useState(false)
 
     const passwordChecks = [
         { label: 'Al menos 8 caracteres', ok: password.length >= 8 },
@@ -235,32 +237,52 @@ export default function Register() {
                             <label htmlFor="register-password" className="mb-1.5 block text-[13px] font-medium text-slate-200">
                                 Contraseña
                             </label>
-                            <input
-                                id="register-password"
-                                type="password"
-                                autoComplete="new-password"
-                                required
-                                value={password}
-                                onChange={(event) => setPassword(event.target.value)}
-                                placeholder="Crea una contraseña segura"
-                                className="w-full rounded-xl border border-white/15 bg-[#131c31] px-3.5 py-2.5 text-sm text-white placeholder:text-slate-400 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/20"
-                            />
+                            <div className="relative">
+                                <input
+                                    id="register-password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    autoComplete="new-password"
+                                    required
+                                    value={password}
+                                    onChange={(event) => setPassword(event.target.value)}
+                                    placeholder="Crea una contraseña segura"
+                                    className="w-full rounded-xl border border-white/15 bg-[#131c31] px-3.5 py-2.5 pr-11 text-sm text-white placeholder:text-slate-400 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/20"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                                >
+                                    {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                                </button>
+                            </div>
                         </div>
 
                         <div>
                             <label htmlFor="register-confirm" className="mb-1.5 block text-[13px] font-medium text-slate-200">
                                 Confirmar contraseña
                             </label>
-                            <input
-                                id="register-confirm"
-                                type="password"
-                                autoComplete="new-password"
-                                required
-                                value={confirmPassword}
-                                onChange={(event) => setConfirmPassword(event.target.value)}
-                                placeholder="Repite tu contraseña"
-                                className="w-full rounded-xl border border-white/15 bg-[#131c31] px-3.5 py-2.5 text-sm text-white placeholder:text-slate-400 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/20"
-                            />
+                            <div className="relative">
+                                <input
+                                    id="register-confirm"
+                                    type={showConfirm ? 'text' : 'password'}
+                                    autoComplete="new-password"
+                                    required
+                                    value={confirmPassword}
+                                    onChange={(event) => setConfirmPassword(event.target.value)}
+                                    placeholder="Repite tu contraseña"
+                                    className="w-full rounded-xl border border-white/15 bg-[#131c31] px-3.5 py-2.5 pr-11 text-sm text-white placeholder:text-slate-400 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/20"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowConfirm(!showConfirm)}
+                                    aria-label={showConfirm ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                                >
+                                    {showConfirm ? <EyeOff size={17} /> : <Eye size={17} />}
+                                </button>
+                            </div>
                         </div>
 
                         {/* Caja de requisitos ahora 100% oscura */}
