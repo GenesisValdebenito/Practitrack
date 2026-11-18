@@ -20,7 +20,7 @@ const emptyForm = () => ({
     is_in_person: false,
 })
 
-export default function QuickLogWidget() {
+export default function QuickLogWidget({ activePracticeId }: { activePracticeId?: string | null }) {
     const { pathname } = useLocation()
     const [open, setOpen] = useState(false)
     const [saving, setSaving] = useState(false)
@@ -61,8 +61,12 @@ export default function QuickLogWidget() {
         if (!user) {
             setSaving(false)
             return setError('Sesión no válida')
-        }
-        const { error } = await supabase.from('work_logs').insert({ user_id: user.id, ...form })
+        }if (!activePracticeId) {
+    setSaving(false)
+    return setError('Selecciona una práctica para registrar horas.')
+}
+const { error } = await supabase.from('work_logs').insert({ user_id: user.id, practice_id: activePracticeId, ...form })
+        
         setSaving(false)
         if (error) return setError(error.message)
 

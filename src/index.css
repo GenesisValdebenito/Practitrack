@@ -64,8 +64,45 @@ html.dark {
         @apply antialiased;
     }
 
-    * {
+        * {
         transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out;
+    }
+
+    /* Checkbox con estilo propio de la app: blanco en claro, gris oscuro en oscuro */
+    input[type="checkbox"] {
+        appearance: none;
+        height: 1rem;
+        width: 1rem;
+        flex-shrink: 0;
+        border: 1px solid var(--border-strong);
+        border-radius: 0.25rem;
+        background-color: var(--bg-card);
+        cursor: pointer;
+        display: inline-grid;
+        place-content: center;
+    }
+
+    input[type="checkbox"]:hover {
+        border-color: var(--color-brand-400);
+    }
+
+    input[type="checkbox"]:checked {
+        background-color: var(--color-brand-600);
+        border-color: var(--color-brand-600);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 8.5l3.5 3.5L13 4.5'/%3E%3C/svg%3E");
+        background-size: 0.75rem;
+        background-position: center;
+        background-repeat: no-repeat;
+    }
+
+    input[type="checkbox"]:focus-visible {
+        outline: 2px solid var(--color-brand-400);
+        outline-offset: 2px;
+    }
+
+    input[type="checkbox"]:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
     }
 }
 

@@ -376,7 +376,7 @@ export default function ProfilePage() {
                                 <label className="flex items-center gap-3 text-sm">
                                     <input type="checkbox" checked={practiceForm.payment_enabled}
                                         onChange={(event) => setPracticeForm({ ...practiceForm, payment_enabled: event.target.checked })}
-                                        className="h-4 w-4 accent-[var(--color-brand)]" />
+                                        className="h-4 w-4" />
                                     Registrar que esta práctica contempla pagos
                                 </label>
 

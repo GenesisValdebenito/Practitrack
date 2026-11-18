@@ -810,7 +810,7 @@ export default function Layout({
             </nav>
 
             {/* REGISTRO RÁPIDO EXISTENTE */}
-            <QuickLogWidget />
+            <QuickLogWidget activePracticeId={activePracticeId} />
         </div>
     )
 }

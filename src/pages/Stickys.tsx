@@ -92,7 +92,11 @@ function clamp(value: number, min: number, max: number) {
     return Math.min(max, Math.max(min, value))
 }
 
-export default function Stickys() {
+type StickysProps = {
+    activePracticeId: string | null
+}
+
+export default function Stickys({ activePracticeId }: StickysProps) {
     const boardRef = useRef<HTMLDivElement>(null)
     const canvasRef = useRef<HTMLDivElement>(null)
 
@@ -147,6 +151,7 @@ export default function Stickys() {
             .from(TABLE)
             .select('*')
             .eq('user_id', authData.user.id)
+            .eq('practice_id', activePracticeId)
             .order('created_at', { ascending: true })
 
         if (queryError) {
@@ -158,7 +163,7 @@ export default function Stickys() {
         }
 
         setLoading(false)
-    }, [])
+    }, [activePracticeId])
 
     useEffect(() => {
         void loadNotes()
@@ -176,11 +181,12 @@ export default function Stickys() {
         note: BoardNote,
         showError = true,
     ) => {
-        if (!userId) return false
+        if (!userId || !activePracticeId) return false
 
         const payload = {
             id: note.id,
             user_id: userId,
+            practice_id: activePracticeId,
             title: note.title,
             content: note.content,
             color: note.color,
@@ -204,7 +210,7 @@ export default function Stickys() {
         }
 
         return true
-    }, [userId])
+    }, [userId, activePracticeId])
 
     const scheduleSave = useCallback((note: BoardNote) => {
         if (saveTimerRef.current !== null) {

@@ -568,7 +568,7 @@ function AppRoutes() {
 
         <Route
           path="/pizarra"
-          element={<Stickys />}
+          element={<Stickys activePracticeId={activePracticeId} />}
         />
 
         <Route
