@@ -28,6 +28,7 @@ import UserMenu from './UserMenu'
 import QuickLogWidget, {
     LOGS_CHANGED_EVENT,
 } from './QuickLogWidget'
+import practitrackLogo from '../assets/practitrack-logo.png'
 
 type LayoutProps = {
     profile: Profile
@@ -338,8 +339,15 @@ export default function Layout({
                 {/* Marca y control lateral */}
                 <div className="mb-5 flex h-11 items-center justify-between gap-2 px-2">
                     {!sidebarCollapsed && (
-                        <span className="truncate text-sm font-bold tracking-tight">
-                            PractiTrack
+                        <span className="flex min-w-0 items-center gap-2">
+                            <img
+                                src={practitrackLogo}
+                                alt="PractiTrack"
+                                className="h-7 w-7 shrink-0 object-contain"
+                            />
+                            <span className="truncate text-sm font-bold tracking-tight">
+                                PractiTrack
+                            </span>
                         </span>
                     )}
 
