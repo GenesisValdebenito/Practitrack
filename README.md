@@ -4,7 +4,7 @@ Plataforma web multiusuario para planificar, registrar y validar las horas de **
 
 > Proyecto desarrollado como parte de mi práctica profesional (360 horas).
 
-**Demo:** [pendiente de despliegue] · **Autor:** Génesis Valdebenito
+**Demo:** practrack-rust.vercel.app · **Autor:** Génesis Valdebenito en colaboración con Elías Vicencio
 
 <!-- Agrega capturas en docs/ y enlázalas aquí -->
 <!-- ![Dashboard](docs/dashboard.png) -->
@@ -112,7 +112,7 @@ Las fechas aceptan `AAAA-MM-DD` y `DD/MM/AAAA`.
 
 ## Despliegue
 
-1. Importa el repositorio en [Vercel](https://vercel.com) y agrega las variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
+1. Importa el repositorio en [Vercel](https://vercel.com) y agrega las variables `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` y `VITE_TURNSTILE_SITE_KEY`.
 2. `vercel.json` ya incluye la regla necesaria para las rutas de la SPA.
 3. Agrega la URL pública en Supabase (**URL Configuration**) y en Google Cloud (orígenes autorizados) para que el login funcione en producción.
 
