@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { BriefcaseBusiness, ChevronRight, GraduationCap, Plus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { Practice } from '../lib/utils'
+import { CAREERS } from '../lib/careers'
 
 type Props = {
   practices: Practice[]
@@ -28,18 +29,22 @@ export default function PracticeSelector({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState<NewPracticeForm>({
-    name: '',
+    name: 'Mi práctica profesional',
     institution: '',
     career: '',
-    start_date: new Date().toISOString().slice(0, 10),
     required_hours: 360,
     weekly_hours_target: 30,
+    start_date: '',
   })
 
   const handleCreate = async () => {
     setError('')
     if (!form.name.trim()) {
       setError('El nombre de la práctica es obligatorio.')
+      return
+    }
+    if (!form.career.trim()) {
+      setError('Selecciona tu carrera.')
       return
     }
     setSaving(true)
@@ -225,15 +230,26 @@ export default function PracticeSelector({
                 </div>
                 <div>
                   <label className="block text-xs mb-1" style={{ color: 'var(--text-muted, #999999)' }}>
-                    Carrera
+                    Carrera *
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={form.career}
                     onChange={(event) => setForm({ ...form, career: event.target.value })}
-                    className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
-                    style={{ borderColor: 'var(--border-soft, #dddddd)' }}
-                  />
+                    required
+                    className="w-full rounded-lg border px-3 py-2 text-sm"
+                    style={{
+                      borderColor: 'var(--border-soft, #dddddd)',
+                      background: 'var(--bg-card, #ffffff)',
+                      color: 'var(--text-primary, #1a1a1a)',
+                    }}
+                  >
+                    <option value="">Selecciona tu carrera</option>
+                    {CAREERS.map((career) => (
+                      <option key={career} value={career}>
+                        {career}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
