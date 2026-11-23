@@ -8,19 +8,36 @@ import {
   type ImportRow,
   type ParsedWorkbook,
 } from '../lib/importPractiTrack'
+import {
+  applyImport,
+  sectionNeedsPractice,
+  type ImportOutcome,
+} from '../lib/applyImport'
+import { LOGS_CHANGED_EVENT } from './QuickLogWidget'
 
 const panel =
   'rounded-xl border border-[var(--border-soft)] bg-[var(--bg-card)]'
 
-export default function DataImporter() {
+type DataImporterProps = {
+  activePracticeId: string | null
+  onImported?: () => void
+}
+
+export default function DataImporter({
+  activePracticeId,
+  onImported,
+}: DataImporterProps) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const confirmRef = useRef<HTMLDialogElement>(null)
 
   const [workbook, setWorkbook] = useState<ParsedWorkbook | null>(null)
   const [selected, setSelected] = useState<string[]>([])
-  const [step, setStep] = useState<'select' | 'review' | 'summary'>('select')
+  const [step, setStep] = useState<'select' | 'review' | 'summary' | 'result'>('select')
   const [activeSheet, setActiveSheet] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [outcome, setOutcome] = useState<ImportOutcome | null>(null)
 
   const available = useMemo(() => {
     if (!workbook) return []
@@ -44,6 +61,46 @@ export default function DataImporter() {
   const activeRows = selectedRows.filter(
     row => row.sheet === activeSheet,
   )
+
+  // Secciones que exigen una práctica activa y no la tienen.
+  const blockedSections = activePracticeId
+    ? []
+    : [...new Set(validRows.map(row => row.sheet))].filter(sectionNeedsPractice)
+
+  const runImport = async () => {
+    if (validRows.length === 0 || blockedSections.length > 0) return
+
+    setImporting(true)
+    setError('')
+
+    try {
+      const result = await applyImport(validRows, activePracticeId)
+      setOutcome(result)
+      setStep('result')
+      confirmRef.current?.close()
+
+      // Avisa al resto de la app (dashboard, layout, bitácora).
+      window.dispatchEvent(new Event(LOGS_CHANGED_EVENT))
+      onImported?.()
+    } catch (err) {
+      confirmRef.current?.close()
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'No se pudo completar la importación.',
+      )
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const resetImporter = () => {
+    setWorkbook(null)
+    setSelected([])
+    setOutcome(null)
+    setError('')
+    setStep('select')
+  }
 
   const handleFile = async (file: File) => {
     setLoading(true)
@@ -184,11 +241,12 @@ export default function DataImporter() {
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
           ['select', '1. Seleccionar'],
           ['review', '2. Revisar'],
           ['summary', '3. Resumen'],
+          ['result', '4. Importar'],
         ].map(([id, label]) => (
           <div
             key={id}
@@ -492,11 +550,18 @@ export default function DataImporter() {
                 </p>
               )}
 
+              {blockedSections.length > 0 && (
+                <p className="rounded-lg border border-amber-500/40 p-3 text-sm">
+                  Selecciona una práctica activa en el encabezado para
+                  importar: {blockedSections.join(', ')}.
+                </p>
+              )}
+
               <p className="text-sm text-[var(--text-secondary)]">
-                Esta etapa prepara los datos, pero todavía no
-                modifica Supabase. La confirmación definitiva
-                se habilitará después de implementar la
-                comparación con registros existentes.
+                Al importar, los registros nuevos se crean y los que ya
+                existen (mismo nombre o fecha dentro de tu cuenta) se
+                actualizan con los valores del archivo. Los campos
+                vacíos no borran información existente.
               </p>
 
               <div className="flex flex-wrap gap-2">
@@ -510,17 +575,149 @@ export default function DataImporter() {
 
                 <button
                   type="button"
-                  className="btn-primary"
+                  className="btn-ghost border border-[var(--border-soft)]"
                   disabled={validRows.length === 0}
                   onClick={exportReview}
                 >
                   Descargar revisión
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={
+                    validRows.length === 0 ||
+                    blockedSections.length > 0 ||
+                    importing
+                  }
+                  onClick={() => confirmRef.current?.showModal()}
+                >
+                  Importar a PractiTrack
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 'result' && outcome && (
+            <div className="space-y-4">
+              <h3 className="font-semibold">
+                Resultado de la importación
+              </h3>
+
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  ['Creados', outcome.created],
+                  ['Actualizados', outcome.updated],
+                  ['Con errores', outcome.failed],
+                ].map(([label, value]) => (
+                  <div key={label} className={`${panel} p-4`}>
+                    <p className="text-xs text-[var(--text-secondary)]">
+                      {label}
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold">
+                      {value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className={`${panel} space-y-2 p-4`}>
+                <h4 className="text-sm font-semibold">
+                  Detalle por sección
+                </h4>
+                {outcome.sections.map(section => (
+                  <div
+                    key={section.sheet}
+                    className="flex flex-wrap justify-between gap-2 text-sm"
+                  >
+                    <span>{section.sheet}</span>
+                    <span className="text-[var(--text-secondary)]">
+                      {section.created} creados · {section.updated} actualizados
+                      {section.failed > 0 && ` · ${section.failed} con errores`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {outcome.sections.some(section => section.errors.length > 0) && (
+                <div className="max-h-[240px] space-y-1 overflow-auto rounded-lg border border-red-500/30 p-3">
+                  {outcome.sections.flatMap(section =>
+                    section.errors.map(message => (
+                      <p key={`${section.sheet}-${message}`} className="text-xs text-red-500">
+                        {section.sheet} · {message}
+                      </p>
+                    )),
+                  )}
+                </div>
+              )}
+
+              <p className="text-sm text-[var(--text-secondary)]">
+                Los datos ya están guardados en la plataforma y las
+                vistas se actualizaron. Puedes revisarlos en Tareas,
+                Horario, Bitácora y el resto de las secciones.
+              </p>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={resetImporter}
+                >
+                  Importar otro archivo
                 </button>
               </div>
             </div>
           )}
         </>
       )}
+
+      <dialog
+        ref={confirmRef}
+        aria-labelledby="import-confirm-title"
+        className="w-[min(28rem,calc(100vw-2rem))] rounded-xl border border-[var(--border-soft)] bg-[var(--bg-card)] p-5 text-[var(--text-primary)] shadow-2xl backdrop:bg-black/50"
+        onCancel={event => {
+          if (importing) event.preventDefault()
+        }}
+      >
+        <h2 id="import-confirm-title" className="text-lg font-semibold">
+          Confirmar importación
+        </h2>
+
+        <p className="mt-2 text-sm text-[var(--text-secondary)]">
+          Se importarán {validRows.length} registros válidos de{' '}
+          {workbook?.filename ?? 'tu archivo'}. Los registros nuevos se
+          crearán y los existentes se actualizarán
+          {activePracticeId
+            ? ' en la práctica activa.'
+            : ' en tu cuenta.'}
+        </p>
+
+        {invalidRows.length > 0 && (
+          <p className="mt-2 text-sm text-amber-600">
+            {invalidRows.length} registros con errores quedan excluidos.
+          </p>
+        )}
+
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            className="btn-ghost"
+            disabled={importing}
+            onClick={() => confirmRef.current?.close()}
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={importing}
+            onClick={() => void runImport()}
+          >
+            {importing ? 'Importando…' : 'Confirmar importación'}
+          </button>
+        </div>
+      </dialog>
     </section>
   )
 }

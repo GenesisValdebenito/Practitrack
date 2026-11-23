@@ -53,6 +53,7 @@ export default function Data({ activePracticeId }: DataProps) {
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const [showTrash, setShowTrash] = useState(false)
     const [loadError, setLoadError] = useState('')
+    const [reloadKey, setReloadKey] = useState(0)
 
     useEffect(() => {
         let cancelled = false
@@ -108,7 +109,7 @@ export default function Data({ activePracticeId }: DataProps) {
         return () => {
             cancelled = true
         }
-    }, [activePracticeId])
+    }, [activePracticeId, reloadKey])
 
     // Guardar edición
     const handleSaveEdit = async (e: React.FormEvent) => {
@@ -916,7 +917,10 @@ export default function Data({ activePracticeId }: DataProps) {
 
             {/* Nuevo importador multisección */}
             <div className="no-print">
-                <DataImporter />
+                <DataImporter
+                    activePracticeId={activePracticeId}
+                    onImported={() => setReloadKey(key => key + 1)}
+                />
             </div>
 
             {/* Exportaciones existentes */}

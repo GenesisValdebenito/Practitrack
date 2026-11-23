@@ -367,3 +367,8 @@ textarea {
         display: block !important;
     }
 }
+
+/* Evita que la página haga scroll mientras un diálogo modal está abierto */
+body:has(dialog[open]) {
+    overflow: hidden;
+}
