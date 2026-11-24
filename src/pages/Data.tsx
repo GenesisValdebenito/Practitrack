@@ -54,6 +54,7 @@ export default function Data({ activePracticeId }: DataProps) {
     const [showTrash, setShowTrash] = useState(false)
     const [loadError, setLoadError] = useState('')
     const [reloadKey, setReloadKey] = useState(0)
+    const [view, setView] = useState<'bitacora' | 'importar'>('bitacora')
 
     useEffect(() => {
         let cancelled = false
@@ -355,35 +356,66 @@ export default function Data({ activePracticeId }: DataProps) {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight text-primary">
-                        Datos y Gestión de Bitácora
+                        {view === 'importar'
+                            ? 'Importar datos'
+                            : 'Datos y Gestión de Bitácora'}
                     </h1>
 
                     <p className="mt-1 text-sm text-secondary">
-                        Consulta tus registros, revisa las horas de práctica
-                        e importa o exporta información.
+                        {view === 'importar'
+                            ? 'Carga tu archivo, revisa los registros y elige el destino de la importación.'
+                            : 'Consulta tus registros, revisa las horas de práctica e importa o exporta información.'}
                     </p>
                 </div>
 
-                <div className="flex flex-wrap gap-2 no-print">
-                    <button
-                        type="button"
-                        onClick={() => setShowTrash(prev => !prev)}
-                        className="btn-ghost border border-[var(--border-soft)]"
-                    >
-                        {showTrash ? 'Ocultar papelera' : 'Papelera'}
-                    </button>
+                {view === 'bitacora' && (
+                    <div className="flex flex-wrap gap-2 no-print">
+                        <button
+                            type="button"
+                            onClick={() => setShowTrash(prev => !prev)}
+                            className="btn-ghost border border-[var(--border-soft)]"
+                        >
+                            {showTrash ? 'Ocultar papelera' : 'Papelera'}
+                        </button>
 
-                    <button
-                        type="button"
-                        onClick={() => window.print()}
-                        disabled={logs.length === 0}
-                        className="btn-primary"
-                    >
-                        Imprimir resumen
-                    </button>
-                </div>
+                        <button
+                            type="button"
+                            onClick={() => window.print()}
+                            disabled={logs.length === 0}
+                            className="btn-primary"
+                        >
+                            Imprimir resumen
+                        </button>
+                    </div>
+                )}
             </div>
 
+            {/* Pestañas de la sección de datos */}
+            <nav
+                aria-label="Secciones de datos"
+                className="no-print flex gap-1 overflow-x-auto border-b border-[var(--border-soft)]"
+            >
+                {([
+                    ['bitacora', 'Bitácora'],
+                    ['importar', 'Importar datos'],
+                ] as const).map(([id, label]) => (
+                    <button
+                        key={id}
+                        type="button"
+                        onClick={() => setView(id)}
+                        className={`shrink-0 border-b-2 px-3 py-3 text-sm transition-colors ${view === id
+                            ? 'border-[var(--color-brand-500)] font-semibold text-[var(--text-primary)]'
+                            : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                            }`}
+                        aria-current={view === id ? 'page' : undefined}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </nav>
+
+            {view === 'bitacora' && (
+                <>
             {/* Papelera */}
             {showTrash && (
                 <TaskTrash activePracticeId={activePracticeId} />
@@ -915,14 +947,6 @@ export default function Data({ activePracticeId }: DataProps) {
                 </div>
             )}
 
-            {/* Nuevo importador multisección */}
-            <div className="no-print">
-                <DataImporter
-                    activePracticeId={activePracticeId}
-                    onImported={() => setReloadKey(key => key + 1)}
-                />
-            </div>
-
             {/* Exportaciones existentes */}
             <section className="card space-y-4 no-print">
                 <div>
@@ -987,6 +1011,17 @@ export default function Data({ activePracticeId }: DataProps) {
                     </p>
                 )}
             </section>
+                </>
+            )}
+
+            {view === 'importar' && (
+                <div className="no-print mx-auto w-full max-w-3xl">
+                    <DataImporter
+                        activePracticeId={activePracticeId}
+                        onImported={() => setReloadKey(key => key + 1)}
+                    />
+                </div>
+            )}
         </div>
     )
 }

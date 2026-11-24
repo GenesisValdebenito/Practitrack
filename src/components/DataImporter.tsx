@@ -1,5 +1,6 @@
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { supabase } from '../lib/supabase'
 import {
   IMPORT_SECTIONS,
   downloadPractiTrackTemplate,
@@ -38,6 +39,44 @@ export default function DataImporter({
   const [error, setError] = useState('')
   const [importing, setImporting] = useState(false)
   const [outcome, setOutcome] = useState<ImportOutcome | null>(null)
+  const [practices, setPractices] = useState<{ id: string; name: string }[]>([])
+  const [targetPracticeId, setTargetPracticeId] = useState<string | null>(
+    activePracticeId,
+  )
+  const [practiceError, setPracticeError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadPractices = async () => {
+      const { data: auth } = await supabase.auth.getUser()
+      if (!auth.user) return
+
+      const { data, error } = await supabase
+        .from('practices')
+        .select('id, name')
+        .eq('user_id', auth.user.id)
+        .order('created_at', { ascending: false })
+
+      if (cancelled || error) {
+        if (!cancelled && error) setPracticeError(error.message)
+        return
+      }
+
+      const list = (data ?? []) as { id: string; name: string }[]
+      setPractices(list)
+      setTargetPracticeId(current => {
+        if (current && list.some(item => item.id === current)) return current
+        if (activePracticeId && list.some(item => item.id === activePracticeId)) {
+          return activePracticeId
+        }
+        return list[0]?.id ?? null
+      })
+    }
+
+    void loadPractices()
+    return () => { cancelled = true }
+  }, [activePracticeId])
 
   const available = useMemo(() => {
     if (!workbook) return []
@@ -62,19 +101,21 @@ export default function DataImporter({
     row => row.sheet === activeSheet,
   )
 
-  // Secciones que exigen una práctica activa y no la tienen.
-  const blockedSections = activePracticeId
-    ? []
-    : [...new Set(validRows.map(row => row.sheet))].filter(sectionNeedsPractice)
+  // Solo Disponibilidad se guarda sin práctica; el resto necesita un destino.
+  const needsDestination = validRows.some(row => sectionNeedsPractice(row.sheet))
+  const missingDestination = needsDestination && !targetPracticeId
 
   const runImport = async () => {
-    if (validRows.length === 0 || blockedSections.length > 0) return
+    if (validRows.length === 0 || missingDestination) return
 
     setImporting(true)
     setError('')
 
     try {
-      const result = await applyImport(validRows, activePracticeId)
+      const result = await applyImport(
+        validRows,
+        needsDestination ? targetPracticeId : null,
+      )
       setOutcome(result)
       setStep('result')
       confirmRef.current?.close()
@@ -550,10 +591,11 @@ export default function DataImporter({
                 </p>
               )}
 
-              {blockedSections.length > 0 && (
+              {(missingDestination || practiceError) && (
                 <p className="rounded-lg border border-amber-500/40 p-3 text-sm">
-                  Selecciona una práctica activa en el encabezado para
-                  importar: {blockedSections.join(', ')}.
+                  {missingDestination
+                    ? 'Crea una práctica antes de importar: el destino se elige al confirmar.'
+                    : `No se pudieron cargar tus prácticas: ${practiceError}`}
                 </p>
               )}
 
@@ -562,6 +604,8 @@ export default function DataImporter({
                 existen (mismo nombre o fecha dentro de tu cuenta) se
                 actualizan con los valores del archivo. Los campos
                 vacíos no borran información existente.
+                {needsDestination &&
+                  ' El destino (práctica) se te preguntará al confirmar.'}
               </p>
 
               <div className="flex flex-wrap gap-2">
@@ -587,7 +631,7 @@ export default function DataImporter({
                   className="btn-primary"
                   disabled={
                     validRows.length === 0 ||
-                    blockedSections.length > 0 ||
+                    missingDestination ||
                     importing
                   }
                   onClick={() => confirmRef.current?.showModal()}
@@ -674,7 +718,7 @@ export default function DataImporter({
       <dialog
         ref={confirmRef}
         aria-labelledby="import-confirm-title"
-        className="w-[min(28rem,calc(100vw-2rem))] rounded-xl border border-[var(--border-soft)] bg-[var(--bg-card)] p-5 text-[var(--text-primary)] shadow-2xl backdrop:bg-black/50"
+        className="fixed inset-0 m-auto w-[min(28rem,calc(100vw-2rem))] rounded-xl border border-[var(--border-soft)] bg-[var(--bg-card)] p-5 text-[var(--text-primary)] shadow-2xl backdrop:bg-black/50"
         onCancel={event => {
           if (importing) event.preventDefault()
         }}
@@ -686,11 +730,40 @@ export default function DataImporter({
         <p className="mt-2 text-sm text-[var(--text-secondary)]">
           Se importarán {validRows.length} registros válidos de{' '}
           {workbook?.filename ?? 'tu archivo'}. Los registros nuevos se
-          crearán y los existentes se actualizarán
-          {activePracticeId
-            ? ' en la práctica activa.'
-            : ' en tu cuenta.'}
+          crearán y los existentes se actualizarán.
         </p>
+
+        {needsDestination ? (
+          <div className="mt-4 space-y-2">
+            <label
+              htmlFor="import-target"
+              className="block text-sm font-medium"
+            >
+              Importar en:
+            </label>
+            <select
+              id="import-target"
+              className="input-base w-full"
+              value={targetPracticeId ?? ''}
+              disabled={importing}
+              onChange={event => setTargetPracticeId(event.target.value || null)}
+            >
+              {practices.map(practice => (
+                <option key={practice.id} value={practice.id}>
+                  {practice.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-[var(--text-secondary)]">
+              Disponibilidad se guarda en tu cuenta general, sin importar
+              la práctica elegida.
+            </p>
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-[var(--text-secondary)]">
+            Estos datos se guardarán en tu cuenta general.
+          </p>
+        )}
 
         {invalidRows.length > 0 && (
           <p className="mt-2 text-sm text-amber-600">

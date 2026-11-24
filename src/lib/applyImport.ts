@@ -1,5 +1,15 @@
 import { supabase } from './supabase'
-import type { ImportRow } from './importPractiTrack'
+import {
+  normalizeLabel,
+  normalizeEpicCategory,
+  normalizeLogCategory,
+  normalizeTaskStatus,
+  normalizeSprintStatus,
+  parseBooleanValue,
+  parseDayValue,
+  parseTimeValue,
+  type ImportRow,
+} from './importPractiTrack'
 
 // Motor de importación: toma las filas válidas de la revisión y las persiste
 // en Supabase. Los registros nuevos se crean y los existentes (misma clave
@@ -22,8 +32,8 @@ export type ImportOutcome = {
 
 type Existing = { id: string; [key: string]: unknown }
 
-// Secciones que no dependen de una práctica activa.
-const USER_SCOPED = new Set(['Prácticas', 'Disponibilidad'])
+// Única sección que no depende de la práctica elegida como destino.
+const USER_SCOPED = new Set(['Disponibilidad'])
 
 export function sectionNeedsPractice(sheet: string): boolean {
   return !USER_SCOPED.has(sheet)
@@ -31,7 +41,6 @@ export function sectionNeedsPractice(sheet: string): boolean {
 
 // Orden de escritura: primero las entidades referenciadas por las demás.
 const SECTION_ORDER = [
-  'Prácticas',
   'Épicas',
   'Sprints',
   'Actividades',
@@ -42,62 +51,6 @@ const SECTION_ORDER = [
   'Planificación',
 ]
 
-const LOG_CATEGORIES = [
-  'Desarrollo',
-  'Reunión',
-  'Documentación',
-  'Investigación',
-  'Testing',
-  'Otro',
-]
-
-const DAY_NAMES: Record<string, number> = {
-  lunes: 1,
-  martes: 2,
-  miercoles: 3,
-  jueves: 4,
-  viernes: 5,
-  sabado: 6,
-  domingo: 7,
-}
-
-const TASK_STATUS: Record<string, string> = {
-  todo: 'todo',
-  pendiente: 'todo',
-  'por hacer': 'todo',
-  doing: 'doing',
-  'en curso': 'doing',
-  'en progreso': 'doing',
-  haciendo: 'doing',
-  done: 'done',
-  hecha: 'done',
-  hecho: 'done',
-  completada: 'done',
-  completado: 'done',
-  terminada: 'done',
-  terminado: 'done',
-}
-
-const SPRINT_STATUS: Record<string, string> = {
-  open: 'open',
-  abierto: 'open',
-  abierta: 'open',
-  closed: 'closed',
-  cerrado: 'closed',
-  cerrada: 'closed',
-}
-
-const TRUE_VALUES = new Set(['si', 'true', '1', 'presencial', 'yes', 'x', 'verdadero'])
-const FALSE_VALUES = new Set(['no', 'false', '0', 'remoto', 'remote', 'virtual', 'falso'])
-
-function norm(value: unknown): string {
-  return String(value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase()
-}
-
 function num(value: string): number | null {
   if (!value.trim()) return null
   const parsed = Number(value.replace(',', '.'))
@@ -105,47 +58,59 @@ function num(value: string): number | null {
 }
 
 function parseBool(value: string, field: string): boolean {
-  const key = norm(value)
-  if (TRUE_VALUES.has(key)) return true
-  if (FALSE_VALUES.has(key)) return false
-  throw new Error(`Valor inválido en ${field}: «${value}» (usa sí/no)`)
+  const parsed = parseBooleanValue(value)
+  if (parsed === null) {
+    throw new Error(`Valor inválido en ${field}: «${value}» (usa sí/no)`)
+  }
+  return parsed
 }
 
 function parseDay(value: string): number {
-  const key = norm(value)
-  if (DAY_NAMES[key]) return DAY_NAMES[key]
-  const parsed = Number(key)
-  if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 7) return parsed
-  throw new Error(`Día inválido: «${value}» (usa 1-7 o lunes…domingo)`)
+  const parsed = parseDayValue(value)
+  if (parsed === null) {
+    throw new Error(`Día inválido: «${value}» (usa 1-7 o lunes…domingo)`)
+  }
+  return parsed
 }
 
 function parseTime(value: string): string {
-  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/)
-  if (!match || +match[1] > 23 || +match[2] > 59) {
+  const parsed = parseTimeValue(value)
+  if (parsed === null) {
     throw new Error(`Hora inválida: «${value}» (usa HH:MM)`)
   }
-  return `${match[1].padStart(2, '0')}:${match[2]}`
+  return parsed
 }
 
 function parseTaskStatus(value: string): string {
-  const status = TASK_STATUS[norm(value)]
-  if (!status) {
+  const parsed = normalizeTaskStatus(value)
+  if (parsed === null) {
     throw new Error(`Estado inválido: «${value}» (usa todo/doing/done)`)
   }
-  return status
+  return parsed
 }
 
 function parseSprintStatus(value: string): string {
-  const status = SPRINT_STATUS[norm(value)]
-  if (!status) {
+  const parsed = normalizeSprintStatus(value)
+  if (parsed === null) {
     throw new Error(`Estado inválido: «${value}» (usa open/closed)`)
   }
-  return status
+  return parsed
+}
+
+function parseEpicCategory(value: string): string {
+  const parsed = normalizeEpicCategory(value)
+  if (parsed === null) {
+    throw new Error(`Categoría inválida: «${value}»`)
+  }
+  return parsed
 }
 
 function canonicalCategory(value: string): string {
-  const match = LOG_CATEGORIES.find(category => norm(category) === norm(value))
-  return match ?? value.trim()
+  const parsed = normalizeLogCategory(value)
+  if (parsed === null) {
+    throw new Error(`Categoría inválida: «${value}»`)
+  }
+  return parsed
 }
 
 export async function applyImport(
@@ -160,7 +125,7 @@ export async function applyImport(
 
   const needsPractice = rows.some(row => sectionNeedsPractice(row.sheet))
   if (needsPractice && !practiceId) {
-    throw new Error('Selecciona una práctica activa antes de importar.')
+    throw new Error('Selecciona una práctica de destino antes de importar.')
   }
 
   if (practiceId) {
@@ -187,7 +152,6 @@ export async function applyImport(
 
   // Carga solo las tablas necesarias para comparar contra lo existente.
   const [
-    practiceRows,
     epicRows,
     sprintRows,
     activityRows,
@@ -197,7 +161,6 @@ export async function applyImport(
     availabilityRows,
     planningRows,
   ] = await Promise.all([
-    sheets.has('Prácticas') ? fetchExisting('practices', false) : Promise.resolve([]),
     sheets.has('Épicas') || sheets.has('Actividades') ? fetchExisting('epics', true) : Promise.resolve([]),
     sheets.has('Sprints') || sheets.has('Actividades') ? fetchExisting('sprints', true) : Promise.resolve([]),
     sheets.has('Actividades') || sheets.has('Tareas') ? fetchExisting('activities', true) : Promise.resolve([]),
@@ -217,17 +180,16 @@ export async function applyImport(
     sheets.has('Planificación') ? fetchExisting('task_planning', true) : Promise.resolve([]),
   ])
 
-  const practices = new Map(practiceRows.map(row => [norm(row.name), row]))
-  const epics = new Map(epicRows.map(row => [norm(row.name), row]))
-  const sprints = new Map(sprintRows.map(row => [norm(row.name), row]))
-  const activities = new Map(activityRows.map(row => [norm(row.title), row]))
-  const tasks = new Map(taskRows.map(row => [norm(row.title), row]))
+  const epics = new Map(epicRows.map(row => [normalizeLabel(row.name), row]))
+  const sprints = new Map(sprintRows.map(row => [normalizeLabel(row.name), row]))
+  const activities = new Map(activityRows.map(row => [normalizeLabel(row.title), row]))
+  const tasks = new Map(taskRows.map(row => [normalizeLabel(row.title), row]))
   const blocks = new Map(blockRows.map(row => [
     `${row.day_of_week}|${String(row.start_time).slice(0, 5)}`,
     row,
   ]))
   const logs = new Map(logRows.map(row => [
-    `${row.date}|${norm(row.task_description)}`,
+    `${row.date}|${normalizeLabel(row.task_description)}`,
     row,
   ]))
   const availability = new Map(availabilityRows.map(row => [
@@ -289,54 +251,24 @@ export async function applyImport(
         let result: { id: string; created: boolean }
 
         switch (sheet) {
-          case 'Prácticas': {
-            const name = v.name.trim()
-            const existing = practices.get(norm(name))
-            const payload: Record<string, unknown> = { name }
-            if (v.institution) payload.institution = v.institution
-            if (v.career) payload.career = v.career
-            if (v.company) payload.company = v.company
-            if (v.supervisor) payload.supervisor = v.supervisor
-            if (v.start_date) payload.start_date = v.start_date
-            const requiredHours = num(v.required_hours)
-            if (requiredHours !== null) payload.required_hours = requiredHours
-            const weeklyTarget = num(v.weekly_hours_target)
-            if (weeklyTarget !== null) payload.weekly_hours_target = weeklyTarget
-
-            if (!existing) {
-              payload.institution ??= ''
-              payload.career ??= ''
-              payload.company ??= null
-              payload.supervisor ??= null
-              payload.start_date ??= null
-              payload.required_hours ??= 0
-              payload.weekly_hours_target ??= 0
-              payload.is_active = true
-            }
-
-            result = await writeRow('practices', existing, payload, false)
-            practices.set(norm(name), { ...existing, ...payload, id: result.id })
-            break
-          }
-
           case 'Épicas': {
             const name = v.name.trim()
-            const existing = epics.get(norm(name))
+            const existing = epics.get(normalizeLabel(name))
             const payload: Record<string, unknown> = {
               name,
-              category: v.category.trim(),
+              category: parseEpicCategory(v.category),
             }
             if (v.description) payload.description = v.description
             if (!existing) payload.description ??= null
 
             result = await writeRow('epics', existing, payload, true)
-            epics.set(norm(name), { ...existing, ...payload, id: result.id })
+            epics.set(normalizeLabel(name), { ...existing, ...payload, id: result.id })
             break
           }
 
           case 'Sprints': {
             const name = v.name.trim()
-            const existing = sprints.get(norm(name))
+            const existing = sprints.get(normalizeLabel(name))
             const payload: Record<string, unknown> = {
               name,
               start_date: v.start_date,
@@ -350,17 +282,17 @@ export async function applyImport(
             }
 
             result = await writeRow('sprints', existing, payload, true)
-            sprints.set(norm(name), { ...existing, ...payload, id: result.id })
+            sprints.set(normalizeLabel(name), { ...existing, ...payload, id: result.id })
             break
           }
 
           case 'Actividades': {
             const title = v.title.trim()
-            const existing = activities.get(norm(title))
+            const existing = activities.get(normalizeLabel(title))
 
             let epicId: string | null = null
             if (v.epic) {
-              const epic = epics.get(norm(v.epic))
+              const epic = epics.get(normalizeLabel(v.epic))
               if (!epic) {
                 throw new Error(`La épica «${v.epic}» no existe. Inclúyela en la hoja Épicas o créala en el backlog.`)
               }
@@ -369,7 +301,7 @@ export async function applyImport(
 
             let sprintId: string | null = null
             if (v.sprint) {
-              const sprint = sprints.get(norm(v.sprint))
+              const sprint = sprints.get(normalizeLabel(v.sprint))
               if (!sprint) {
                 throw new Error(`El sprint «${v.sprint}» no existe. Inclúyelo en la hoja Sprints o créalo en el backlog.`)
               }
@@ -385,17 +317,17 @@ export async function applyImport(
             }
 
             result = await writeRow('activities', existing, payload, true)
-            activities.set(norm(title), { ...existing, ...payload, id: result.id })
+            activities.set(normalizeLabel(title), { ...existing, ...payload, id: result.id })
             break
           }
 
           case 'Tareas': {
             const title = v.title.trim()
-            const existing = tasks.get(norm(title))
+            const existing = tasks.get(normalizeLabel(title))
 
             let activityId: string | null = null
             if (v.activity) {
-              const activity = activities.get(norm(v.activity))
+              const activity = activities.get(normalizeLabel(v.activity))
               if (!activity) {
                 throw new Error(`La actividad «${v.activity}» no existe. Inclúyela en la hoja Actividades o créala en el backlog.`)
               }
@@ -421,7 +353,7 @@ export async function applyImport(
             }
 
             result = await writeRow('tasks', existing, payload, true)
-            tasks.set(norm(title), { ...existing, ...payload, id: result.id })
+            tasks.set(normalizeLabel(title), { ...existing, ...payload, id: result.id })
             break
           }
 
@@ -462,7 +394,7 @@ export async function applyImport(
           case 'Bitácora': {
             const date = v.fecha
             const description = v.descripcion.trim()
-            const key = `${date}|${norm(description)}`
+            const key = `${date}|${normalizeLabel(description)}`
             const existing = logs.get(key)
 
             const payload: Record<string, unknown> = {
@@ -506,7 +438,7 @@ export async function applyImport(
           }
 
           case 'Planificación': {
-            const task = tasks.get(norm(v.task))
+            const task = tasks.get(normalizeLabel(v.task))
             if (!task) {
               throw new Error(`La tarea «${v.task}» no existe. Inclúyela en la hoja Tareas o créala en la plataforma.`)
             }

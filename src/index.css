@@ -368,6 +368,13 @@ textarea {
     }
 }
 
+/* Los diálogos modales deben quedar siempre centrados en la pantalla */
+dialog[open] {
+    position: fixed;
+    inset: 0;
+    margin: auto;
+}
+
 /* Evita que la página haga scroll mientras un diálogo modal está abierto */
 body:has(dialog[open]) {
     overflow: hidden;

@@ -2,10 +2,9 @@
 import * as XLSX from 'xlsx'
 
 export const IMPORT_SECTIONS = [
-  { sheet: 'Prácticas', fields: ['name', 'institution', 'career', 'company', 'supervisor', 'start_date', 'required_hours', 'weekly_hours_target'] },
   { sheet: 'Épicas', fields: ['name', 'description', 'category'] },
   { sheet: 'Sprints', fields: ['name', 'description', 'start_date', 'end_date', 'status'] },
-  { sheet: 'Actividades', fields: ['title', 'description', 'activity_date', 'status', 'sprint', 'epic'] },
+  { sheet: 'Actividades', fields: ['title', 'sprint', 'epic'] },
   { sheet: 'Tareas', fields: ['title', 'status', 'due_date', 'planned_hours', 'category', 'is_in_person', 'activity'] },
   { sheet: 'Horario', fields: ['title', 'day_of_week', 'start_time', 'end_time', 'break_minutes', 'modality', 'effective_from', 'effective_to'] },
   { sheet: 'Bitácora', fields: ['fecha', 'horas', 'descripcion', 'categoria', 'presencial'] },
@@ -41,8 +40,108 @@ function cellValue(value: unknown): string {
   return String(value).trim()
 }
 
+export const EPIC_CATEGORIES = [
+  'Análisis', 'Base de datos', 'Backend', 'Frontend',
+  'Automatización', 'Calidad', 'Gestión',
+]
+
+export const LOG_CATEGORIES = [
+  'Desarrollo', 'Reunión', 'Documentación', 'Investigación', 'Testing', 'Otro',
+]
+
+// Valores admitidos por la base de datos y alias frecuentes del archivo.
+const EPIC_CATEGORY_ALIASES: Record<string, string> = {
+  analisis: 'Análisis',
+  basedatos: 'Base de datos', basededatos: 'Base de datos', bd: 'Base de datos', database: 'Base de datos',
+  backend: 'Backend', seguridad: 'Backend', infraestructura: 'Backend',
+  frontend: 'Frontend', diseno: 'Frontend', disenoui: 'Frontend',
+  automatizacion: 'Automatización', integracion: 'Automatización', correo: 'Automatización',
+  calidad: 'Calidad', testing: 'Calidad', qa: 'Calidad', pruebas: 'Calidad',
+  gestion: 'Gestión', management: 'Gestión', documentacion: 'Gestión', planificacion: 'Gestión',
+}
+
+const LOG_CATEGORY_ALIASES: Record<string, string> = {
+  desarrollo: 'Desarrollo', programacion: 'Desarrollo', codigo: 'Desarrollo',
+  reunion: 'Reunión', reuniones: 'Reunión',
+  documentacion: 'Documentación',
+  investigacion: 'Investigación',
+  testing: 'Testing', pruebas: 'Testing', calidad: 'Testing', qa: 'Testing',
+  otro: 'Otro', otros: 'Otro', general: 'Otro',
+}
+
+const TASK_STATUS_ALIASES: Record<string, string> = {
+  todo: 'todo', pendiente: 'todo', porhacer: 'todo',
+  doing: 'doing', encurso: 'doing', enprogreso: 'doing', haciendo: 'doing', procesando: 'doing',
+  done: 'done', hecha: 'done', hecho: 'done', completada: 'done', completado: 'done',
+  terminada: 'done', terminado: 'done', finalizada: 'done', finalizado: 'done',
+}
+
+const SPRINT_STATUS_ALIASES: Record<string, string> = {
+  open: 'open', abierto: 'open', abierta: 'open', activo: 'open',
+  planificado: 'open', planificada: 'open', planeado: 'open', encurso: 'open',
+  closed: 'closed', cerrado: 'closed', cerrada: 'closed',
+  finalizado: 'closed', finalizada: 'closed', completado: 'closed', completada: 'closed',
+}
+
+const TRUE_VALUES = new Set(['si', 'true', '1', 'presencial', 'yes', 'x', 'verdadero', 'v'])
+const FALSE_VALUES = new Set(['no', 'false', '0', 'remoto', 'remote', 'virtual', 'falso', 'f'])
+
+const DAY_ALIASES: Record<string, number> = {
+  lunes: 1, lun: 1,
+  martes: 2, mar: 2,
+  miercoles: 3, mier: 3,
+  jueves: 4, jue: 4,
+  viernes: 5, vie: 5,
+  sabado: 6, sab: 6,
+  domingo: 7, dom: 7,
+}
+
+/** Normaliza nombres para vincular filas de hojas distintas. */
+export function normalizeLabel(value: unknown): string {
+  return normalize(value).replace(/[^a-z0-9]/g, '')
+}
+
+function fromAliases(aliases: Record<string, string>, value: string): string | null {
+  return aliases[normalizeLabel(value)] ?? null
+}
+
+export function normalizeEpicCategory(value: string): string | null {
+  return fromAliases(EPIC_CATEGORY_ALIASES, value)
+}
+
+export function normalizeLogCategory(value: string): string | null {
+  return fromAliases(LOG_CATEGORY_ALIASES, value)
+}
+
+export function normalizeTaskStatus(value: string): string | null {
+  return fromAliases(TASK_STATUS_ALIASES, value)
+}
+
+export function normalizeSprintStatus(value: string): string | null {
+  return fromAliases(SPRINT_STATUS_ALIASES, value)
+}
+
+export function parseBooleanValue(value: string): boolean | null {
+  const key = normalize(value)
+  if (TRUE_VALUES.has(key)) return true
+  if (FALSE_VALUES.has(key)) return false
+  return null
+}
+
+export function parseDayValue(value: string): number | null {
+  const key = normalize(value)
+  if (DAY_ALIASES[key]) return DAY_ALIASES[key]
+  const parsed = Number(key)
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 7 ? parsed : null
+}
+
+export function parseTimeValue(value: string): string | null {
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/)
+  if (!match || +match[1] > 23 || +match[2] > 59) return null
+  return `${match[1].padStart(2, '0')}:${match[2]}`
+}
+
 const required: Record<string, string[]> = {
-  'Prácticas': ['name'],
   'Épicas': ['name', 'category'],
   'Sprints': ['name', 'start_date', 'end_date'],
   'Actividades': ['title'],
@@ -132,6 +231,63 @@ export function validateRow(row: ImportRow): string[] {
     const end = normalizeDate(row.values.end_date ?? '')
     if (start && end && start > end) {
       errors.push('El sprint termina antes de comenzar')
+    }
+    if (row.values.status && !normalizeSprintStatus(row.values.status)) {
+      errors.push(`Estado inválido: ${row.values.status}. Usa open/closed (o abierto/cerrado, planificado/finalizado)`)
+    }
+  }
+
+  if (row.sheet === 'Épicas' &&
+      row.values.category &&
+      !normalizeEpicCategory(row.values.category)) {
+    errors.push(`Categoría inválida: ${row.values.category}. Usa una de: ${EPIC_CATEGORIES.join(', ')}`)
+  }
+
+  if (row.sheet === 'Tareas') {
+    if (row.values.status && !normalizeTaskStatus(row.values.status)) {
+      errors.push(`Estado inválido: ${row.values.status}. Usa todo/doing/done (o pendiente/en curso/hecha)`)
+    }
+    if (row.values.is_in_person &&
+        parseBooleanValue(row.values.is_in_person) === null) {
+      errors.push(`Valor inválido en is_in_person: ${row.values.is_in_person}. Usa sí/no`)
+    }
+  }
+
+  if (row.sheet === 'Horario') {
+    if (parseDayValue(row.values.day_of_week ?? '') === null) {
+      errors.push('Día inválido. Usa 1-7 o lunes…domingo')
+    }
+    const start = parseTimeValue(row.values.start_time ?? '')
+    const end = parseTimeValue(row.values.end_time ?? '')
+    if (!start || !end) {
+      errors.push('Hora inválida. Usa HH:MM (por ejemplo 09:00)')
+    } else if (end <= start) {
+      errors.push('La hora de término debe ser posterior a la de inicio')
+    }
+    if (row.values.modality &&
+        parseBooleanValue(row.values.modality) === null) {
+      errors.push(`Modalidad inválida: ${row.values.modality}. Usa presencial/remoto`)
+    }
+    const breakMinutes = Number((row.values.break_minutes ?? '').replace(',', '.'))
+    if (Number.isFinite(breakMinutes) && breakMinutes > 300) {
+      errors.push('La colación debe estar entre 0 y 300 minutos')
+    }
+  }
+
+  if (row.sheet === 'Bitácora') {
+    if (row.values.categoria && !normalizeLogCategory(row.values.categoria)) {
+      errors.push(`Categoría inválida: ${row.values.categoria}. Usa una de: ${LOG_CATEGORIES.join(', ')}`)
+    }
+    if (row.values.presencial &&
+        parseBooleanValue(row.values.presencial) === null) {
+      errors.push(`Valor inválido en presencial: ${row.values.presencial}. Usa sí/no`)
+    }
+  }
+
+  if (row.sheet === 'Planificación') {
+    const hours = Number((row.values.planned_hours ?? '').replace(',', '.'))
+    if (Number.isFinite(hours) && hours > 24) {
+      errors.push('Las horas planificadas deben estar entre 0 y 24')
     }
   }
 
@@ -227,18 +383,60 @@ export function downloadPractiTrackTemplate() {
   const workbook = XLSX.utils.book_new()
 
   const guide = XLSX.utils.aoa_to_sheet([
-    ['PLANTILLA PRACTITRACK'],
-    ['Completa únicamente las hojas que necesites.'],
-    ['No es obligatorio utilizar todas las secciones.'],
-    ['No modifiques los nombres de las columnas.'],
-    ['Fechas: AAAA-MM-DD o DD/MM/AAAA.'],
-    ['No incluyas contraseñas ni identificadores de usuario.'],
-    ['Los vínculos entre entidades se revisarán antes de importar.'],
-    ['Esta plantilla no modifica datos por sí sola.'],
+    ['PLANTILLA PRACTITRACK — IMPORTACIÓN DE DATOS'],
+    [''],
+    ['1. Completa solo las hojas que necesites; deja vacías las demás.'],
+    ['2. No modifiques los nombres de las columnas ni su orden.'],
+    ['3. Fechas: AAAA-MM-DD o DD/MM/AAAA. Horas: HH:MM (por ejemplo 09:00).'],
+    ['4. El destino de la importación (la práctica) se elige DENTRO de la plataforma al confirmar. No escribas prácticas en este archivo.'],
+    ['5. En Actividades, Tareas y Planificación, los vínculos (sprint, epic, activity, task) deben coincidir con el nombre exacto usado en su hoja.'],
+    ['6. Mira la hoja "Ejemplos" para ver una fila de cada sección.'],
+    ['7. Los campos vacíos no borran datos existentes. Si el registro ya existe (mismo nombre o fecha), se actualiza.'],
+    [''],
+    ['VALORES PERMITIDOS'],
+    [`Épicas > category: ${EPIC_CATEGORIES.join(', ')}`],
+    ['Sprints > status: open o closed (también se aceptan abierto, planificado, cerrado, finalizado)'],
+    ['Tareas > status: todo, doing o done (también pendiente, en curso, hecha)'],
+    ['Tareas > is_in_person y Bitácora > presencial: sí o no (también presencial o remoto)'],
+    ['Horario > day_of_week: 1-7 o lunes, martes, miércoles, jueves, viernes, sábado, domingo'],
+    ['Horario > modality: presencial o remoto'],
+    [`Bitácora > categoria: ${LOG_CATEGORIES.join(', ')}`],
+    ['Planificación > planned_hours: entre 0 y 24'],
   ])
 
-  guide['!cols'] = [{ wch: 85 }]
+  guide['!cols'] = [{ wch: 105 }]
   XLSX.utils.book_append_sheet(workbook, guide, 'Instrucciones')
+
+  const examples = XLSX.utils.aoa_to_sheet([
+    ['Ejemplos - borra o ignora esta hoja al importar'],
+    [],
+    ['Épicas', ...IMPORT_SECTIONS[0].fields],
+    ['', 'Autenticación y roles', 'Altas, login y permisos', 'Backend'],
+    [],
+    ['Sprints', ...IMPORT_SECTIONS[1].fields],
+    ['', 'Sprint 1 - Base de datos', 'Modelado y migraciones', '2026-01-05', '2026-01-18', 'open'],
+    [],
+    ['Actividades', ...IMPORT_SECTIONS[2].fields],
+    ['', 'Diseñar esquema inicial', 'Sprint 1 - Base de datos', 'Autenticación y roles'],
+    [],
+    ['Tareas', ...IMPORT_SECTIONS[3].fields],
+    ['', 'Crear tabla users', 'todo', '2026-01-06', '4', 'Backend', 'no', 'Diseñar esquema inicial'],
+    [],
+    ['Horario', ...IMPORT_SECTIONS[4].fields],
+    ['', 'Jornada de desarrollo', '1', '09:00', '13:00', '30', 'remoto', '2026-01-05', '2026-03-31'],
+    [],
+    ['Bitácora', ...IMPORT_SECTIONS[5].fields],
+    ['', '2026-01-06', '4', 'Modelado de entidades', 'Desarrollo', 'no'],
+    [],
+    ['Disponibilidad', ...IMPORT_SECTIONS[6].fields],
+    ['', '2026-01-05', '2026-03-31', '20', 'Práctica laboral'],
+    [],
+    ['Planificación', ...IMPORT_SECTIONS[7].fields],
+    ['', 'Crear tabla users', '2026-01-06', '2', 'Avance inicial'],
+  ])
+
+  examples['!cols'] = [{ wch: 20 }, { wch: 34 }, { wch: 22 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 22 }]
+  XLSX.utils.book_append_sheet(workbook, examples, 'Ejemplos')
 
   for (const section of IMPORT_SECTIONS) {
     const fields = [...section.fields]
